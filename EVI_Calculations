@@ -1,0 +1,2547 @@
+//// Define study area
+var Cimarron = ee.FeatureCollection(table)
+    .filter("COUNTY_NAM == 'CIMARRON'")
+    .geometry();
+Map.addLayer(Cimarron);
+Map.centerObject(Cimarron);
+
+
+var colorizedVis = {
+  min: 0.0,
+  max: 0.5,
+  palette: ['FFFFFF', 'CE7E45', 'DF923D', 'F1B555', 'FCD163', '99B718', '74A901',
+'66A000', '529400', '3E8601', '207401', '056201', '004C00', '023B01',
+'012E01', '011D01', '011301'],
+};
+
+////---------------------------------------Extract EVI data from grasslands (2005)
+var cdl= ee.Image('USDA/NASS/CDL/2006').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2005
+var cdl2005 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2006-01-01', '2006-12-31'))// Get 2006 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2005') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass05 = cdl2005.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass05geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass05geo);
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass05win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2005-01-01', '2005-04-01'))
+                .filterBounds(grass05geo)
+                .map(function(img) {return img.clip(grass05geo)});
+
+var eviGrass05spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2005-04-01', '2005-07-01'))
+                .filterBounds(grass05geo)
+                .map(function(img) {return img.clip(grass05geo)});
+
+var eviGrass05sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2005-07-01', '2005-10-01'))
+                .filterBounds(grass05geo)
+                .map(function(img) {return img.clip(grass05geo)});
+
+var eviGrass05fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2005-10-01', '2006-01-01'))
+                .filterBounds(grass05geo)
+                .map(function(img) {return img.clip(grass05geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2005
+var EVIgrass_05medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass05win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_05medianGraphWin,'EVIgrass_05medianGraphWin' )
+
+var EVIgrass_05medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass05spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_05medianGraphSpr,'EVIgrass_05medianGraphSpr' )
+
+var EVIgrass_05medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass05sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_05medianGraphSum,'EVIgrass_05medianGraphSum' )
+
+var EVIgrass_05medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass05fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_05medianGraphFal,'EVIgrass_05medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_05_medMapWin = eviGrass05win.median();
+Map.addLayer(grassEVI_05_medMapWin, colorizedVis, 'grassEVI_05_medMapWin');
+
+var grassEVI_05_medMapSpr = eviGrass05spr.median();
+Map.addLayer(grassEVI_05_medMapSpr, colorizedVis, 'grassEVI_05_medMapSpr');
+
+var grassEVI_05_medMapSum = eviGrass05sum.median();
+Map.addLayer(grassEVI_05_medMapSum, colorizedVis, 'grassEVI_05_medMapSum');
+
+var grassEVI_05_medMapFal = eviGrass05fal.median();
+Map.addLayer(grassEVI_05_medMapFal, colorizedVis, 'grassEVI_05_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_05_medValWin = grassEVI_05_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_05_medValWin,'grassEVI_05_medValWin');
+
+var grassEVI_05_medValSpr = grassEVI_05_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_05_medValSpr,'grassEVI_05_medValSpr');
+
+var grassEVI_05_medValSum = grassEVI_05_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_05_medValSum,'grassEVI_05_medValSum');
+
+var grassEVI_05_medValFal = grassEVI_05_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_05_medValFal,'grassEVI_05_medValFal');
+
+//------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_05_medMapWin,
+  description: 'grassEVIwin05',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_05_medMapSpr,
+  description: 'grassEVIspr05',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_05_medMapSum,
+  description: 'grassEVIsum05',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_05_medMapFal,
+  description: 'grassEVIfal05',
+  scale: 30,
+  region:Cimarron,
+});
+
+////---------------------------------------Extract EVI data from grasslands (2006)
+var cdl= ee.Image('USDA/NASS/CDL/2006').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2006
+var cdl2006 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2006-01-01', '2006-12-31'))// Get 2006 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2006') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass06 = cdl2006.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass06geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass06geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass06win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2006-01-01', '2006-04-01'))
+                .filterBounds(grass06geo)
+                .map(function(img) {return img.clip(grass06geo)});
+
+var eviGrass06spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2006-04-01', '2006-07-01'))
+                .filterBounds(grass06geo)
+                .map(function(img) {return img.clip(grass06geo)});
+
+var eviGrass06sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2006-07-01', '2006-10-01'))
+                .filterBounds(grass06geo)
+                .map(function(img) {return img.clip(grass06geo)});
+
+var eviGrass06fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2006-10-01', '2007-01-01'))
+                .filterBounds(grass06geo)
+                .map(function(img) {return img.clip(grass06geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2006
+var EVIgrass_06medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass06win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_06medianGraphWin,'EVIgrass_06medianGraphWin' )
+
+var EVIgrass_06medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass06spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_06medianGraphSpr,'EVIgrass_06medianGraphSpr' )
+
+var EVIgrass_06medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass06sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_06medianGraphSum,'EVIgrass_06medianGraphSum' )
+
+var EVIgrass_06medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass06fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_06medianGraphFal,'EVIgrass_06medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_06_medMapWin = eviGrass06win.median();
+Map.addLayer(grassEVI_06_medMapWin, colorizedVis, 'grassEVI_06_medMapWin');
+
+var grassEVI_06_medMapSpr = eviGrass06spr.median();
+Map.addLayer(grassEVI_06_medMapSpr, colorizedVis, 'grassEVI_06_medMapSpr');
+
+var grassEVI_06_medMapSum = eviGrass06sum.median();
+Map.addLayer(grassEVI_06_medMapSum, colorizedVis, 'grassEVI_06_medMapSum');
+
+var grassEVI_06_medMapFal = eviGrass06fal.median();
+Map.addLayer(grassEVI_06_medMapFal, colorizedVis, 'grassEVI_06_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_06_medValWin = grassEVI_06_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_06_medValWin,'grassEVI_06_medValWin');
+
+var grassEVI_06_medValSpr = grassEVI_06_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_06_medValSpr,'grassEVI_06_medValSpr');
+
+var grassEVI_06_medValSum = grassEVI_06_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_06_medValSum,'grassEVI_06_medValSum');
+
+var grassEVI_06_medValFal = grassEVI_06_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_06_medValFal,'grassEVI_06_medValFal');
+
+////------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_06_medMapWin,
+  description: 'grassEVIwin06',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_06_medMapSpr,
+  description: 'grassEVIspr06',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_06_medMapSum,
+  description: 'grassEVIsum06',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_06_medMapFal,
+  description: 'grassEVIfal06',
+  scale: 30,
+  region:Cimarron,
+});
+
+//-----------------------------------Extract EVI data from grasslands (2007)
+var cdl= ee.Image('USDA/NASS/CDL/2006').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2007
+var cdl2007 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2006-01-01', '2006-12-31'))// Get 2006 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2007') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass07 = cdl2007.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass07geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass07geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass07win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2007-01-01', '2007-04-01'))
+                .filterBounds(grass07geo)
+                .map(function(img) {return img.clip(grass07geo)});
+
+var eviGrass07spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2007-04-01', '2007-07-01'))
+                .filterBounds(grass07geo)
+                .map(function(img) {return img.clip(grass07geo)});
+
+var eviGrass07sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2007-07-01', '2007-10-01'))
+                .filterBounds(grass07geo)
+                .map(function(img) {return img.clip(grass07geo)});
+
+var eviGrass07fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2007-10-01', '2008-01-01'))
+                .filterBounds(grass07geo)
+                .map(function(img) {return img.clip(grass07geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2007
+var EVIgrass_07medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass07win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_07medianGraphWin,'EVIgrass_07medianGraphWin' )
+
+var EVIgrass_07medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass07spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_07medianGraphSpr,'EVIgrass_07medianGraphSpr' )
+
+var EVIgrass_07medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass07sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_07medianGraphSum,'EVIgrass_07medianGraphSum' )
+
+var EVIgrass_07medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass07fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_07medianGraphFal,'EVIgrass_07medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_07_medMapWin = eviGrass07win.median();
+Map.addLayer(grassEVI_07_medMapWin, colorizedVis, 'grassEVI_07_medMapWin');
+
+var grassEVI_07_medMapSpr = eviGrass07spr.median();
+Map.addLayer(grassEVI_07_medMapSpr, colorizedVis, 'grassEVI_07_medMapSpr');
+
+var grassEVI_07_medMapSum = eviGrass07sum.median();
+Map.addLayer(grassEVI_07_medMapSum, colorizedVis, 'grassEVI_07_medMapSum');
+
+var grassEVI_07_medMapFal = eviGrass07fal.median();
+Map.addLayer(grassEVI_07_medMapFal, colorizedVis, 'grassEVI_07_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_07_medValWin = grassEVI_07_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_07_medValWin,'grassEVI_07_medValWin');
+
+var grassEVI_07_medValSpr = grassEVI_07_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_07_medValSpr,'grassEVI_07_medValSpr');
+
+var grassEVI_07_medValSum = grassEVI_07_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_07_medValSum,'grassEVI_07_medValSum');
+
+var grassEVI_07_medValFal = grassEVI_07_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_07_medValFal,'grassEVI_07_medValFal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_07_medMapWin,
+  description: 'grassEVIwin07',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_07_medMapSpr,
+  description: 'grassEVIspr07',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_07_medMapSum,
+  description: 'grassEVIsum07',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_07_medMapFal,
+  description: 'grassEVIfal07',
+  scale: 30,
+  region:Cimarron,
+});
+
+//-----------------------------------Extract EVI data from grasslands (2008)
+var cdl= ee.Image('USDA/NASS/CDL/2008').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2008
+var cdl2008 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2008-01-01', '2008-12-31'))// Get 2008 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2008') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass08 = cdl2008.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass08geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass08geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass08win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2008-01-01', '2008-04-01'))
+                .filterBounds(grass08geo)
+                .map(function(img) {return img.clip(grass08geo)});
+var eviGrass08spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2008-04-01', '2008-07-01'))
+                .filterBounds(grass08geo)
+                .map(function(img) {return img.clip(grass08geo)});
+var eviGrass08sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2008-07-01', '2008-10-01'))
+                .filterBounds(grass08geo)
+                .map(function(img) {return img.clip(grass08geo)});
+var eviGrass08fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2008-10-01', '2009-01-01'))
+                .filterBounds(grass08geo)
+                .map(function(img) {return img.clip(grass08geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2008
+var EVIgrass_08medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass08win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_08medianGraphWin,'EVIgrass_08medianGraphWin' )
+
+var EVIgrass_08medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass08spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_08medianGraphSpr,'EVIgrass_08medianGraphSpr' )
+
+var EVIgrass_08medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass08sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_08medianGraphSum,'EVIgrass_08medianGraphSum' )
+
+var EVIgrass_08medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass08fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_08medianGraphFal,'EVIgrass_08medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_08_medMapWin = eviGrass08win.median();
+Map.addLayer(grassEVI_08_medMapWin, colorizedVis, 'grassEVI_08_medMapWin');
+
+var grassEVI_08_medMapSpr = eviGrass08spr.median();
+Map.addLayer(grassEVI_08_medMapSpr, colorizedVis, 'grassEVI_08_medMapSpr');
+
+var grassEVI_08_medMapSum = eviGrass08sum.median();
+Map.addLayer(grassEVI_08_medMapSum, colorizedVis, 'grassEVI_08_medMapSum');
+
+var grassEVI_08_medMapFal = eviGrass08fal.median();
+Map.addLayer(grassEVI_08_medMapFal, colorizedVis, 'grassEVI_08_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_08_medValWin = grassEVI_08_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_08_medValWin,'grassEVI_08_medValWin');
+
+var grassEVI_08_medValSpr = grassEVI_08_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_08_medValSpr,'grassEVI_08_medValSpr');
+
+var grassEVI_08_medValSum = grassEVI_08_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_08_medValSum,'grassEVI_08_medValSum');
+
+var grassEVI_08_medValFal = grassEVI_08_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_08_medValFal,'grassEVI_08_medValFal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_08_medMapWin,
+  description: 'grassEVIwin08',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_08_medMapSpr,
+  description: 'grassEVIspr08',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_08_medMapSum,
+  description: 'grassEVIsum08',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_08_medMapFal,
+  description: 'grassEVIfal08',
+  scale: 30,
+  region:Cimarron,
+});
+
+//-----------------------------------Extract EVI data from grasslands (2009)
+var cdl= ee.Image('USDA/NASS/CDL/2009').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2009
+var cdl2009 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2009-01-01', '2009-12-31'))// Get 2009 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2009') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass09 = cdl2009.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass09geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass09geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass09win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2009-01-01', '2009-04-01'))
+                .filterBounds(grass09geo)
+                .map(function(img) {return img.clip(grass09geo)});
+var eviGrass09spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2009-04-01', '2009-07-01'))
+                .filterBounds(grass09geo)
+                .map(function(img) {return img.clip(grass09geo)});
+var eviGrass09sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2009-07-01', '2009-10-01'))
+                .filterBounds(grass09geo)
+                .map(function(img) {return img.clip(grass09geo)});
+var eviGrass09fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2009-10-01', '2010-01-01'))
+                .filterBounds(grass09geo)
+                .map(function(img) {return img.clip(grass09geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2009
+var EVIgrass_09medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass09win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_09medianGraphWin,'EVIgrass_09medianGraphWin' )
+
+var EVIgrass_09medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass09spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_09medianGraphSpr,'EVIgrass_09medianGraphSpr' )
+
+var EVIgrass_09medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass09sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_09medianGraphSum,'EVIgrass_09medianGraphSum' )
+
+var EVIgrass_09medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass09fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_09medianGraphFal,'EVIgrass_09medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_09_medMapWin = eviGrass09win.median();
+Map.addLayer(grassEVI_09_medMapWin, colorizedVis, 'grassEVI_09_medMapWin');
+
+var grassEVI_09_medMapSpr = eviGrass09spr.median();
+Map.addLayer(grassEVI_09_medMapSpr, colorizedVis, 'grassEVI_09_medMapSpr');
+
+var grassEVI_09_medMapSum = eviGrass09sum.median();
+Map.addLayer(grassEVI_09_medMapSum, colorizedVis, 'grassEVI_09_medMapSum');
+
+var grassEVI_09_medMapFal = eviGrass09fal.median();
+Map.addLayer(grassEVI_09_medMapFal, colorizedVis, 'grassEVI_09_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_09_medValWin = grassEVI_09_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_09_medValWin,'grassEVI_09_medValWin');
+
+var grassEVI_09_medValSpr = grassEVI_09_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_09_medValSpr,'grassEVI_09_medValSpr');
+
+var grassEVI_09_medValSum = grassEVI_09_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_09_medValSum,'grassEVI_09_medValSum');
+
+var grassEVI_09_medValFal = grassEVI_09_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_09_medValFal,'grassEVI_09_medValFal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_09_medMapWin,
+  description: 'grassEVIwin09',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_09_medMapSpr,
+  description: 'grassEVIspr09',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_09_medMapSum,
+  description: 'grassEVIsum09',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_09_medMapFal,
+  description: 'grassEVIfal09',
+  scale: 30,
+  region:Cimarron,
+});
+
+//-----------------------------------Extract EVI data from grasslands (2010)
+var cdl= ee.Image('USDA/NASS/CDL/2010').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2010
+var cdl2010 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2010-01-01', '2010-12-31'))// Get 2010 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2010') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass10 = cdl2010.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass10geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass10geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass10win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2010-01-01', '2010-04-01'))
+                .filterBounds(grass10geo)
+                .map(function(img) {return img.clip(grass10geo)});
+var eviGrass10spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2010-04-01', '2010-07-01'))
+                .filterBounds(grass10geo)
+                .map(function(img) {return img.clip(grass10geo)});
+var eviGrass10sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2010-07-01', '2010-10-01'))
+                .filterBounds(grass10geo)
+                .map(function(img) {return img.clip(grass10geo)});
+var eviGrass10fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2010-10-01', '2011-01-01'))
+                .filterBounds(grass10geo)
+                .map(function(img) {return img.clip(grass10geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2010
+var EVIgrass_10medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass10win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_10medianGraphWin,'EVIgrass_10medianGraphWin' )
+
+var EVIgrass_10medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass10spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_10medianGraphSpr,'EVIgrass_10medianGraphSpr' )
+
+var EVIgrass_10medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass10sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_10medianGraphSum,'EVIgrass_10medianGraphSum' );
+
+var EVIgrass_10medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass10fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(EVIgrass_10medianGraphFal,'EVIgrass_10medianGraphFal' );
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_10_medMapWin = eviGrass10win.median();
+Map.addLayer(grassEVI_10_medMapWin, colorizedVis, 'grassEVI_10_medMapWin');
+
+var grassEVI_10_medMapSpr = eviGrass10spr.median();
+Map.addLayer(grassEVI_10_medMapSpr, colorizedVis, 'grassEVI_10_medMapSpr');
+
+var grassEVI_10_medMapSum = eviGrass10sum.median();
+Map.addLayer(grassEVI_10_medMapSum, colorizedVis, 'grassEVI_10_medMapSum');
+
+var grassEVI_10_medMapFal = eviGrass10fal.median();
+Map.addLayer(grassEVI_10_medMapFal, colorizedVis, 'grassEVI_10_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_10_medValWin = grassEVI_10_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_10_medValWin,'grassEVI_10_medValWin');
+
+var grassEVI_10_medValSpr = grassEVI_10_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_10_medValSpr,'grassEVI_10_medValSpr');
+
+var grassEVI_10_medValSum = grassEVI_10_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_10_medValSum,'grassEVI_10_medValSum');
+
+var grassEVI_10_medValFal = grassEVI_10_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_10_medValFal,'grassEVI_10_medValFal');
+
+//------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_10_medMapWin,
+  description: 'grassEVIwin10',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_10_medMapSpr,
+  description: 'grassEVIspr10',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_10_medMapSum,
+  description: 'grassEVIsum10',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_10_medMapFal,
+  description: 'grassEVIfal10',
+  scale: 30,
+  region:Cimarron,
+});
+
+////----------------------------------------------Extract EVI data from grasslands (2011)
+var cdl= ee.Image('USDA/NASS/CDL/2011').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2011
+var cdl2011 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2011-01-01', '2011-12-31'))// Get 2011 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2011') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass11 = cdl2011.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass11geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass11geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass11win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2011-01-01', '2011-04-01'))
+                .filterBounds(grass11geo)
+                .map(function(img) {return img.clip(grass11geo)});
+var eviGrass11spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2011-04-01', '2011-07-01'))
+                .filterBounds(grass11geo)
+                .map(function(img) {return img.clip(grass11geo)});
+var eviGrass11sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2011-07-01', '2011-10-01'))
+                .filterBounds(grass11geo)
+                .map(function(img) {return img.clip(grass11geo)});
+var eviGrass11fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2011-10-01', '2012-01-01'))
+                .filterBounds(grass11geo)
+                .map(function(img) {return img.clip(grass11geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2011
+var EVIgrass_11medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass11win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_11medianGraphWin,'EVIgrass_11medianGraphWin' )
+
+var EVIgrass_11medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass11spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_11medianGraphSpr,'EVIgrass_11medianGraphSpr' )
+
+var EVIgrass_11medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass11sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_11medianGraphSum,'EVIgrass_11medianGraphSum' )
+
+var EVIgrass_11medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass11fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_11medianGraphFal,'EVIgrass_11medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_11_medMapWin = eviGrass11win.median();
+Map.addLayer(grassEVI_11_medMapWin, colorizedVis, 'grassEVI_11_medMapWin');
+
+var grassEVI_11_medMapSpr = eviGrass11spr.median();
+Map.addLayer(grassEVI_11_medMapSpr, colorizedVis, 'grassEVI_11_medMapSpr');
+
+var grassEVI_11_medMapSum = eviGrass11sum.median();
+Map.addLayer(grassEVI_11_medMapSum, colorizedVis, 'grassEVI_11_medMapSum');
+
+var grassEVI_11_medMapFal = eviGrass11fal.median();
+Map.addLayer(grassEVI_11_medMapFal, colorizedVis, 'grassEVI_11_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_11_medValWin = grassEVI_11_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_11_medValWin,'grassEVI_11_medValWin');
+
+var grassEVI_11_medValSpr = grassEVI_11_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_11_medValSpr,'grassEVI_11_medValSpr');
+
+var grassEVI_11_medValSum = grassEVI_11_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_11_medValSum,'grassEVI_11_medValSum');
+
+var grassEVI_11_medValFal = grassEVI_11_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_11_medValFal,'grassEVI_11_medValFal');
+
+//------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_11_medMapWin,
+  description: 'grassEVIwin11',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_11_medMapSpr,
+  description: 'grassEVIspr11',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_11_medMapSum,
+  description: 'grassEVIsum11',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_11_medMapFal,
+  description: 'grassEVIfal11',
+  scale: 30,
+  region:Cimarron,
+});
+
+////-----------------------------------------Extract EVI data from grasslands (2012)
+var cdl= ee.Image('USDA/NASS/CDL/2012').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2012
+var cdl2012 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2012-01-01', '2012-12-31'))// Get 2012 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2012') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass12 = cdl2012.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass12geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass12geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass12win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2012-01-01', '2012-04-01'))
+                .filterBounds(grass12geo)
+                .map(function(img) {return img.clip(grass12geo)});
+
+var eviGrass12spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2012-04-01', '2012-07-01'))
+                .filterBounds(grass12geo)
+                .map(function(img) {return img.clip(grass12geo)});
+
+var eviGrass12sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2012-07-01', '2012-10-01'))
+                .filterBounds(grass12geo)
+                .map(function(img) {return img.clip(grass12geo)});
+
+var eviGrass12fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2012-10-01', '2013-01-01'))
+                .filterBounds(grass12geo)
+                .map(function(img) {return img.clip(grass12geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2012
+var EVIgrass_12medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass12win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_12medianGraphWin,'EVIgrass_12medianGraphWin' )
+
+var EVIgrass_12medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass12spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_12medianGraphSpr,'EVIgrass_12medianGraphSpr' )
+
+var EVIgrass_12medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass12sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_12medianGraphFal,'EVIgrass_12medianGraphFal' )
+
+var EVIgrass_12medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass12fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_12medianGraphFal,'EVIgrass_12medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_12_medMapWin = eviGrass12win.median();
+Map.addLayer(grassEVI_12_medMapWin, colorizedVis, 'grassEVI_12_medMapWin');
+
+var grassEVI_12_medMapSpr = eviGrass12spr.median();
+Map.addLayer(grassEVI_12_medMapSpr, colorizedVis, 'grassEVI_12_medMapSpr');
+
+var grassEVI_12_medMapSum = eviGrass12sum.median();
+Map.addLayer(grassEVI_12_medMapSum, colorizedVis, 'grassEVI_12_medMapSum');
+
+var grassEVI_12_medMapFal = eviGrass12fal.median();
+Map.addLayer(grassEVI_12_medMapFal, colorizedVis, 'grassEVI_12_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_12_medValWin = grassEVI_12_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_12_medValWin,'grassEVI_12_medValWin');
+
+var grassEVI_12_medValSpr = grassEVI_12_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_12_medValSpr,'grassEVI_12_medValSpr');
+
+var grassEVI_12_medValSum = grassEVI_12_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_12_medValSum,'grassEVI_12_medValSum');
+
+var grassEVI_12_medValFal = grassEVI_12_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_12_medValFal,'grassEVI_12_medValFal');
+
+//------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_12_medMapWin,
+  description: 'grassEVIwin12',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_12_medMapSpr,
+  description: 'grassEVIspr12',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_12_medMapSum,
+  description: 'grassEVIsum12',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_12_medMapFal,
+  description: 'grassEVIfal12',
+  scale: 30,
+  region:Cimarron,
+});
+
+////----------------------------------------------Extract EVI data from grasslands (2013)
+var cdl= ee.Image('USDA/NASS/CDL/2013').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2013
+var cdl2013 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2013-01-01', '2013-12-31'))// Get 2013 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2013') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass13 = cdl2013.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass13geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass13geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass13win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2013-01-01', '2013-04-01'))
+                .filterBounds(grass13geo)
+                .map(function(img) {return img.clip(grass13geo)});
+
+var eviGrass13spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2013-04-01', '2013-07-01'))
+                .filterBounds(grass13geo)
+                .map(function(img) {return img.clip(grass13geo)});
+
+var eviGrass13sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2013-07-01', '2013-10-01'))
+                .filterBounds(grass13geo)
+                .map(function(img) {return img.clip(grass13geo)});
+
+var eviGrass13fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2013-10-01', '2014-01-01'))
+                .filterBounds(grass13geo)
+                .map(function(img) {return img.clip(grass13geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2013
+var EVIgrass_13medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass13win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_13medianGraphWin,'EVIgrass_13medianGraphWin' )
+
+var EVIgrass_13medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass13spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_13medianGraphSpr,'EVIgrass_13medianGraphSpr' )
+
+var EVIgrass_13medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass13sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_13medianGraphSum,'EVIgrass_13medianGraphSum' )
+
+var EVIgrass_13medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass13fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_13medianGraphFal,'EVIgrass_13medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_13_medMapWin = eviGrass13win.median();
+Map.addLayer(grassEVI_13_medMapWin, colorizedVis, 'grassEVI_13_medMapWin');
+
+var grassEVI_13_medMapSpr = eviGrass13spr.median();
+Map.addLayer(grassEVI_13_medMapSpr, colorizedVis, 'grassEVI_13_medMapSpr');
+
+var grassEVI_13_medMapSum = eviGrass13sum.median();
+Map.addLayer(grassEVI_13_medMapSum, colorizedVis, 'grassEVI_13_medMapSum');
+
+var grassEVI_13_medMapFal = eviGrass13fal.median();
+Map.addLayer(grassEVI_13_medMapFal, colorizedVis, 'grassEVI_13_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_13_medValWin = grassEVI_13_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_13_medValWin,'grassEVI_13_medValWin');
+
+var grassEVI_13_medValSpr = grassEVI_13_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_13_medValSpr,'grassEVI_13_medValSpr');
+
+var grassEVI_13_medValSum = grassEVI_13_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_13_medValSum,'grassEVI_13_medValSum');
+
+var grassEVI_13_medValFal = grassEVI_13_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_13_medValFal,'grassEVI_13_medValFal');
+
+//------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_13_medMapWin,
+  description: 'grassEVIwin13',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_13_medMapSpr,
+  description: 'grassEVIspr13',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_13_medMapSum,
+  description: 'grassEVIsum13',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_13_medMapFal,
+  description: 'grassEVIfal13',
+  scale: 30,
+  region:Cimarron,
+});
+
+////--------------------------------------------------------------------------Extract EVI data from grasslands (2014)
+var cdl= ee.Image('USDA/NASS/CDL/2014').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2014
+var cdl2014 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2014-01-01', '2014-12-31'))// Get 2014 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2014') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass14 = cdl2014.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass14geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass14geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass14win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2014-01-01', '2014-04-01'))
+                .filterBounds(grass14geo)
+                .map(function(img) {return img.clip(grass14geo)});
+
+var eviGrass14spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2014-04-01', '2014-07-01'))
+                .filterBounds(grass14geo)
+                .map(function(img) {return img.clip(grass14geo)});
+
+var eviGrass14sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2014-07-01', '2014-10-01'))
+                .filterBounds(grass14geo)
+                .map(function(img) {return img.clip(grass14geo)});
+
+var eviGrass14fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2014-10-01', '2015-01-01'))
+                .filterBounds(grass14geo)
+                .map(function(img) {return img.clip(grass14geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2014
+var EVIgrass_14medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass14win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_14medianGraphWin,'EVIgrass_14medianGraphWin' )
+
+var EVIgrass_14medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass14spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_14medianGraphSpr,'EVIgrass_14medianGraphSpr' )
+
+var EVIgrass_14medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass14sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_14medianGraphSum,'EVIgrass_14medianGraphFalSum' )
+
+var EVIgrass_14medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass14fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_14medianGraphFal,'EVIgrass_14medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_14_medMapWin = eviGrass14win.median();
+Map.addLayer(grassEVI_14_medMapWin, colorizedVis, 'grassEVI_14_medMapWin');
+
+var grassEVI_14_medMapSpr = eviGrass14spr.median();
+Map.addLayer(grassEVI_14_medMapSpr, colorizedVis, 'grassEVI_14_medMapSpr');
+
+var grassEVI_14_medMapSum = eviGrass14sum.median();
+Map.addLayer(grassEVI_14_medMapSum, colorizedVis, 'grassEVI_14_medMapSum');
+
+var grassEVI_14_medMapFal = eviGrass14fal.median();
+Map.addLayer(grassEVI_14_medMapFal, colorizedVis, 'grassEVI_14_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_14_medValWin = grassEVI_14_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_14_medValWin,'grassEVI_14_medValWin');
+
+var grassEVI_14_medValSpr = grassEVI_14_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_14_medValSpr,'grassEVI_14_medValSpr');
+
+var grassEVI_14_medValSum = grassEVI_14_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_14_medValSum,'grassEVI_14_medValSum');
+
+var grassEVI_14_medValFal = grassEVI_14_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_14_medValFal,'grassEVI_14_medValFal');
+
+//------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_14_medMapWin,
+  description: 'grassEVIwin14',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_14_medMapSpr,
+  description: 'grassEVIspr14',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_14_medMapSum,
+  description: 'grassEVIsum14',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_14_medMapFal,
+  description: 'grassEVIfal14',
+  scale: 30,
+  region:Cimarron,
+});
+
+////----------------------------------------------Extract EVI data from grasslands (2015)
+var cdl= ee.Image('USDA/NASS/CDL/2015').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2015
+var cdl2015 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2015-01-01', '2015-12-31'))// Get 2015 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2015') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass15 = cdl2015.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass15geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass15geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass15win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2015-01-01', '2015-04-01'))
+                .filterBounds(grass15geo)
+                .map(function(img) {return img.clip(grass15geo)});
+
+var eviGrass15spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2015-04-01', '2015-07-01'))
+                .filterBounds(grass15geo)
+                .map(function(img) {return img.clip(grass15geo)});
+
+var eviGrass15sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2015-07-01', '2015-10-01'))
+                .filterBounds(grass15geo)
+                .map(function(img) {return img.clip(grass15geo)});
+
+var eviGrass15fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2015-10-01', '2016-01-01'))
+                .filterBounds(grass15geo)
+                .map(function(img) {return img.clip(grass15geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2015
+var EVIgrass_15medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass15win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_15medianGraphWin,'EVIgrass_15medianGraphWin' )
+
+var EVIgrass_15medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass15spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_15medianGraphSpr,'EVIgrass_15medianGraphSpr' )
+
+var EVIgrass_15medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass15sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_15medianGraphSum,'EVIgrass_15medianGraphSum' )
+
+var EVIgrass_15medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass15fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_15medianGraphFal,'EVIgrass_15medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_15_medMapWin = eviGrass15win.median();
+Map.addLayer(grassEVI_15_medMapWin, colorizedVis, 'grassEVI_15_medMapWin');
+
+var grassEVI_15_medMapSpr = eviGrass15spr.median();
+Map.addLayer(grassEVI_15_medMapSpr, colorizedVis, 'grassEVI_15_medMapSpr');
+
+var grassEVI_15_medMapSum = eviGrass15sum.median();
+Map.addLayer(grassEVI_15_medMapSum, colorizedVis, 'grassEVI_15_medMapSum');
+
+var grassEVI_15_medMapFal = eviGrass15fal.median();
+Map.addLayer(grassEVI_15_medMapFal, colorizedVis, 'grassEVI_15_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_15_medValWin = grassEVI_15_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_15_medValWin,'grassEVI_15_medValWin');
+
+var grassEVI_15_medValSpr = grassEVI_15_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_15_medValSpr,'grassEVI_15_medValSpr');
+
+var grassEVI_15_medValSum = grassEVI_15_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_15_medValSum,'grassEVI_15_medValSum');
+
+var grassEVI_15_medValFal = grassEVI_15_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_15_medValFal,'grassEVI_15_medValFal');
+
+//------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_15_medMapWin,
+  description: 'grassEVIwin15',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_15_medMapSpr,
+  description: 'grassEVIspr15',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_15_medMapSum,
+  description: 'grassEVIsum15',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_15_medMapFal,
+  description: 'grassEVIfal15',
+  scale: 30,
+  region:Cimarron,
+});
+
+////----------------------------------------------Extract EVI data from grasslands (2016)
+var cdl= ee.Image('USDA/NASS/CDL/2016').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2016
+var cdl2016 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2016-01-01', '2016-12-31'))// Get 2016 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2016') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass16 = cdl2016.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass16geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass16geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass16win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2016-01-01', '2016-04-01'))
+                .filterBounds(grass16geo)
+                .map(function(img) {return img.clip(grass16geo)});
+
+var eviGrass16spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2016-04-01', '2016-07-01'))
+                .filterBounds(grass16geo)
+                .map(function(img) {return img.clip(grass16geo)});
+
+var eviGrass16sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2016-07-01', '2016-10-01'))
+                .filterBounds(grass16geo)
+                .map(function(img) {return img.clip(grass16geo)});
+
+var eviGrass16fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2016-10-01', '2017-01-01'))
+                .filterBounds(grass16geo)
+                .map(function(img) {return img.clip(grass16geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2016
+var EVIgrass_16medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass16win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_16medianGraphWin,'EVIgrass_16medianGraphWin' )
+
+var EVIgrass_16medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass16spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_16medianGraphSpr,'EVIgrass_16medianGraphSpr' )
+
+var EVIgrass_16medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass16sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_16medianGraphSum,'EVIgrass_16medianGraphSum' )
+
+var EVIgrass_16medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass16fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_16medianGraphFal,'EVIgrass_16medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_16_medMapWin = eviGrass16win.median();
+Map.addLayer(grassEVI_16_medMapWin, colorizedVis, 'grassEVI_16_medMapWin');
+
+var grassEVI_16_medMapSpr = eviGrass16spr.median();
+Map.addLayer(grassEVI_16_medMapSpr, colorizedVis, 'grassEVI_16_medMapSpr');
+
+var grassEVI_16_medMapSum = eviGrass16sum.median();
+Map.addLayer(grassEVI_16_medMapSum, colorizedVis, 'grassEVI_16_medMapSum');
+
+var grassEVI_16_medMapFal = eviGrass16fal.median();
+Map.addLayer(grassEVI_16_medMapFal, colorizedVis, 'grassEVI_16_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_16_medValWin = grassEVI_16_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_16_medValWin,'grassEVI_16_medValWin');
+
+var grassEVI_16_medValSpr = grassEVI_16_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_16_medValSpr,'grassEVI_16_medValSpr');
+
+var grassEVI_16_medValSum = grassEVI_16_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_16_medValSum,'grassEVI_16_medValSum');
+
+var grassEVI_16_medValFal = grassEVI_16_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_16_medValFal,'grassEVI_16_medValFal');
+
+//------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_16_medMapWin,
+  description: 'grassEVIwin16',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_16_medMapSpr,
+  description: 'grassEVIspr16',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_16_medMapSum,
+  description: 'grassEVIsum16',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_16_medMapFal,
+  description: 'grassEVIfal16',
+  scale: 30,
+  region:Cimarron,
+});
+
+////------------------------------------------------------Extract EVI data from grasslands (2017)
+var cdl= ee.Image('USDA/NASS/CDL/2017').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2017
+var cdl2017 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2017-01-01', '2017-12-31'))// Get 2017 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2017') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass17 = cdl2017.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass17geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass17geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass17win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2017-01-01', '2017-04-01'))
+                .filterBounds(grass17geo)
+                .map(function(img) {return img.clip(grass17geo)});
+
+var eviGrass17spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2017-04-01', '2017-07-01'))
+                .filterBounds(grass17geo)
+                .map(function(img) {return img.clip(grass17geo)});
+
+var eviGrass17sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2017-07-01', '2017-10-01'))
+                .filterBounds(grass17geo)
+                .map(function(img) {return img.clip(grass17geo)});
+
+var eviGrass17fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2017-10-01', '2018-01-01'))
+                .filterBounds(grass17geo)
+                .map(function(img) {return img.clip(grass17geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2017
+var EVIgrass_17medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass17win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_17medianGraphWin,'EVIgrass_17medianGraphWin' )
+
+var EVIgrass_17medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass17spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_17medianGraphSpr,'EVIgrass_17medianGraphSpr' )
+
+var EVIgrass_17medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass17sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_17medianGraphSum,'EVIgrass_17medianGraphSum' )
+
+var EVIgrass_17medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass17fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_17medianGraphFal,'EVIgrass_17medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_17_medMapWin = eviGrass17win.median();
+Map.addLayer(grassEVI_17_medMapWin, colorizedVis, 'grassEVI_17_medMapWin');
+
+var grassEVI_17_medMapSpr = eviGrass17spr.median();
+Map.addLayer(grassEVI_17_medMapSpr, colorizedVis, 'grassEVI_17_medMapSpr');
+
+var grassEVI_17_medMapSum = eviGrass17sum.median();
+Map.addLayer(grassEVI_17_medMapSum, colorizedVis, 'grassEVI_17_medMapSum');
+
+var grassEVI_17_medMapFal = eviGrass17fal.median();
+Map.addLayer(grassEVI_17_medMapFal, colorizedVis, 'grassEVI_17_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_17_medValWin = grassEVI_17_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_17_medValWin,'grassEVI_17_medValWin');
+
+var grassEVI_17_medValSpr = grassEVI_17_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_17_medValSpr,'grassEVI_17_medValSpr');
+
+var grassEVI_17_medValSum = grassEVI_17_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_17_medValSum,'grassEVI_17_medValSum');
+
+var grassEVI_17_medValFal = grassEVI_17_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_17_medValFal,'grassEVI_17_medValFal');
+
+//------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_17_medMapWin,
+  description: 'grassEVIwin17',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_17_medMapSpr,
+  description: 'grassEVIspr17',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_17_medMapSum,
+  description: 'grassEVIsum17',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_17_medMapFal,
+  description: 'grassEVIfal17',
+  scale: 30,
+  region:Cimarron,
+});
+
+////---------------------------------------------Extract EVI data from grasslands (2018)
+var cdl= ee.Image('USDA/NASS/CDL/2018').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2018
+var cdl2018 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2018-01-01', '2018-12-31'))// Get 2018 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2018') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass18 = cdl2018.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass18geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass18geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass18win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2018-01-01', '2018-04-01'))
+                .filterBounds(grass18geo)
+                .map(function(img) {return img.clip(grass18geo)});
+
+var eviGrass18spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2018-04-01', '2018-07-01'))
+                .filterBounds(grass18geo)
+                .map(function(img) {return img.clip(grass18geo)});
+
+var eviGrass18sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2018-07-01', '2018-10-01'))
+                .filterBounds(grass18geo)
+                .map(function(img) {return img.clip(grass18geo)});
+
+var eviGrass18fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2018-10-01', '2019-01-01'))
+                .filterBounds(grass18geo)
+                .map(function(img) {return img.clip(grass18geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2018
+var EVIgrass_18medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass18win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_18medianGraphWin,'EVIgrass_18medianGraphWin' )
+
+var EVIgrass_18medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass18spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_18medianGraphSpr,'EVIgrass_18medianGraphSpr' )
+
+var EVIgrass_18medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass18sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_18medianGraphSum,'EVIgrass_18medianGraphSum' )
+
+var EVIgrass_18medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass18fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_18medianGraphFal,'EVIgrass_18medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_18_medMapWin = eviGrass18win.median();
+Map.addLayer(grassEVI_18_medMapWin, colorizedVis, 'grassEVI_18_medMapWin');
+
+var grassEVI_18_medMapSpr = eviGrass18spr.median();
+Map.addLayer(grassEVI_18_medMapSpr, colorizedVis, 'grassEVI_18_medMapSpr');
+
+var grassEVI_18_medMapSum = eviGrass18sum.median();
+Map.addLayer(grassEVI_18_medMapSum, colorizedVis, 'grassEVI_18_medMapSum');
+
+var grassEVI_18_medMapFal = eviGrass18fal.median();
+Map.addLayer(grassEVI_18_medMapFal, colorizedVis, 'grassEVI_18_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_18_medValWin = grassEVI_18_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_18_medValWin,'grassEVI_18_medValWin');
+
+var grassEVI_18_medValSpr = grassEVI_18_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_18_medValSpr,'grassEVI_18_medValSpr');
+
+var grassEVI_18_medValSum = grassEVI_18_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_18_medValSum,'grassEVI_18_medValSum');
+
+var grassEVI_18_medValFal = grassEVI_18_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_18_medValFal,'grassEVI_18_medValFal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_18_medMapWin,
+  description: 'grassEVIwin18',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_18_medMapSpr,
+  description: 'grassEVIspr18',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_18_medMapSum,
+  description: 'grassEVIsum18',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_18_medMapFal,
+  description: 'grassEVIfal18',
+  scale: 30,
+  region:Cimarron,
+});
+
+////--------------------------------------------------Extract EVI data from grasslands (2019)
+var cdl= ee.Image('USDA/NASS/CDL/2019').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2019
+var cdl2019 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2019-01-01', '2019-12-31'))// Get 2019 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2019') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass19 = cdl2019.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass19geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass19geo)
+
+//-------------------------------------------------------// EVI seasonal calculations
+var eviGrass19win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2019-01-01', '2019-04-01'))
+                .filterBounds(grass19geo)
+                .map(function(img) {return img.clip(grass19geo)});
+
+var eviGrass19spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2019-04-01', '2019-07-01'))
+                .filterBounds(grass19geo)
+                .map(function(img) {return img.clip(grass19geo)});
+
+var eviGrass19sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2019-07-01', '2019-10-01'))
+                .filterBounds(grass19geo)
+                .map(function(img) {return img.clip(grass19geo)});
+
+var eviGrass19fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2019-10-01', '2020-01-01'))
+                .filterBounds(grass19geo)
+                .map(function(img) {return img.clip(grass19geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2019
+var EVIgrass_19medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass19win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_19medianGraphWin,'EVIgrass_19medianGraphWin' )
+
+var EVIgrass_19medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass19spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_19medianGraphSpr,'EVIgrass_19medianGraphSpr' )
+
+var EVIgrass_19medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass19sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_19medianGraphSum,'EVIgrass_19medianGraphSum' )
+
+var EVIgrass_19medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass19fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_19medianGraphFal,'EVIgrass_19medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_19_medMapWin = eviGrass19win.median();
+Map.addLayer(grassEVI_19_medMapWin, colorizedVis, 'grassEVI_19_medMapWin');
+
+var grassEVI_19_medMapSpr = eviGrass19spr.median();
+Map.addLayer(grassEVI_19_medMapSpr, colorizedVis, 'grassEVI_19_medMapSpr');
+
+var grassEVI_19_medMapSum = eviGrass19sum.median();
+Map.addLayer(grassEVI_19_medMapSum, colorizedVis, 'grassEVI_19_medMapSum');
+
+var grassEVI_19_medMapFal = eviGrass19fal.median();
+Map.addLayer(grassEVI_19_medMapFal, colorizedVis, 'grassEVI_19_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_19_medValWin = grassEVI_19_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_19_medValWin,'grassEVI_19_medValWin');
+
+var grassEVI_19_medValSpr = grassEVI_19_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_19_medValSpr,'grassEVI_19_medValSpr');
+
+var grassEVI_19_medValSum = grassEVI_19_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_19_medValSum,'grassEVI_19_medValSum');
+
+var grassEVI_19_medValFal = grassEVI_19_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_19_medValFal,'grassEVI_19_medValFal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_19_medMapWin,
+  description: 'grassEVIwin19',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_19_medMapSpr,
+  description: 'grassEVIspr19',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_19_medMapSum,
+  description: 'grassEVIsum19',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_19_medMapFal,
+  description: 'grassEVIfal19',
+  scale: 30,
+  region:Cimarron,
+});
+
+////--------------------------------------------Extract EVI data from grasslands (2020)
+var cdl= ee.Image('USDA/NASS/CDL/2020').select('cropland').clip(Cimarron)
+
+//// Create mask to isolate grasslands
+var masked = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) )
+
+// CDL data 2020
+var cdl2020 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2020-01-01', '2020-12-31'))// Get 2020 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl2020') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+//Remap to grass only
+var cdlGrass20 = cdl2020.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass20geo = masked.reduceToVectors({
+  geometry: Cimarron,
+  scale: 56,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass20geo)
+
+//-------------------------------------------------------// EVI seasonal
+var eviGrass20win = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2020-01-01', '2020-04-01'))
+                .filterBounds(grass20geo)
+                .map(function(img) {return img.clip(grass20geo)});
+
+var eviGrass20spr = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2020-04-01', '2020-07-01'))
+                .filterBounds(grass20geo)
+                .map(function(img) {return img.clip(grass20geo)});
+
+var eviGrass20sum = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2020-07-01', '2020-10-01'))
+                .filterBounds(grass20geo)
+                .map(function(img) {return img.clip(grass20geo)});
+
+var eviGrass20fal = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_EVI')
+                .filter(ee.Filter.date('2020-10-01', '2021-01-01'))
+                .filterBounds(grass20geo)
+                .map(function(img) {return img.clip(grass20geo)});
+
+//------------------------------------------------------//Make plot of grassland EVI data 2020
+var EVIgrass_20medianGraphWin = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass20win,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_20medianGraphWin,'EVIgrass_20medianGraphWin' )
+
+var EVIgrass_20medianGraphSpr = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass20spr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_20medianGraphSpr,'EVIgrass_20medianGraphSpr' )
+
+var EVIgrass_20medianGraphSum = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass20sum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_20medianGraphSum,'EVIgrass_20medianGraphSum' )
+
+var EVIgrass_20medianGraphFal = ui.Chart.image.seriesByRegion({
+  imageCollection: eviGrass20fal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+})
+print(EVIgrass_20medianGraphFal,'EVIgrass_20medianGraphFal' )
+
+//--------------------------------------------//Add map layer of median grass EVI
+var grassEVI_20_medMapWin = eviGrass20win.median();
+Map.addLayer(grassEVI_20_medMapWin, colorizedVis, 'grassEVI_20_medMapWin');
+
+var grassEVI_20_medMapSpr = eviGrass20spr.median();
+Map.addLayer(grassEVI_20_medMapSpr, colorizedVis, 'grassEVI_20_medMapSpr');
+
+var grassEVI_20_medMapSum = eviGrass20sum.median();
+Map.addLayer(grassEVI_20_medMapSum, colorizedVis, 'grassEVI_20_medMapSum');
+
+var grassEVI_20_medMapFal = eviGrass20fal.median();
+Map.addLayer(grassEVI_20_medMapFal, colorizedVis, 'grassEVI_20_medMapFal');
+
+//----------------------------------------------//Prints one median value for each season
+var grassEVI_20_medValWin = grassEVI_20_medMapWin.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_20_medValWin,'grassEVI_20_medValWin');
+
+var grassEVI_20_medValSpr = grassEVI_20_medMapSpr.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_20_medValSpr,'grassEVI_20_medValSpr');
+
+var grassEVI_20_medValSum = grassEVI_20_medMapSum.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_20_medValSum,'grassEVI_20_medValSum');
+
+var grassEVI_20_medValFal = grassEVI_20_medMapFal.reduceRegion({
+  reducer: ee.Reducer.median(),
+  geometry: Cimarron,
+  scale: 30,
+  maxPixels: 1e9
+});
+print(grassEVI_20_medValFal,'grassEVI_20_medValFal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: grassEVI_20_medMapWin,
+  description: 'grassEVIwin20',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_20_medMapSpr,
+  description: 'grassEVIspr20',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_20_medMapSum,
+  description: 'grassEVIsum20',
+  scale: 30,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: grassEVI_20_medMapFal,
+  description: 'grassEVIfal20',
+  scale: 30,
+  region:Cimarron,
+});

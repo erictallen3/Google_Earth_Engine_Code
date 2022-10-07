@@ -1,0 +1,2324 @@
+// Assign Cimarron county shapefile to variable "table"
+var table = ee.FeatureCollection("users/erictallen3/CimShp");
+
+//// Define study area
+var Cimarron = ee.FeatureCollection(table)
+    .filter("COUNTY_NAM == 'CIMARRON'")
+    .geometry();
+Map.addLayer(Cimarron);
+Map.centerObject(Cimarron);
+
+var collection = ee.ImageCollection('GRIDMET/DROUGHT').filterBounds(Cimarron);
+print(collection);
+
+////------------------------------Grass SPI 2005
+var dS = '2005-01-01';
+var dE = '2005-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y05 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2006').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2005
+var cdl05 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2006-07-01', '2006-07-31'))// Get 2006 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl05') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass05 = cdl05.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass05geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass05geo);
+
+//-------------------------------------------------------- Land use type-specific SPI Calculations
+var SPI1y05GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2005-01-01', '2005-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y05GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2005-04-01', '2005-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y05GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2005-07-01', '2005-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y05GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2005-10-01', '2006-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph05win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y05GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph05win,SPI1y05GRASSwin,'grassSPI1yrgraph05win' );
+
+var grassSPI1yrgraph05spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y05GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph05spr,SPI1y05GRASSspr,'grassSPI1yrgraph05spr' );
+
+var grassSPI1yrgraph05sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y05GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph05sum,SPI1y05GRASSsum,'grassSPI1yrgraph05sum' );
+
+var grassSPI1yrgraph05fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y05GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph05fal,SPI1y05GRASSfal,'grassSPI1yrgraph05fal' );
+
+//----------------------------------------------------------------------Add SPI map layer
+var SPI1yMed05win = SPI1y05GRASSwin.median();
+Map.addLayer(SPI1yMed05win, colorbarOptions1, 'SPI1yMed05win');
+
+var SPI1yMed05spr = SPI1y05GRASSspr.median();
+Map.addLayer(SPI1yMed05spr, colorbarOptions1, 'SPI1yMed05spr');
+
+var SPI1yMed05sum = SPI1y05GRASSsum.median();
+Map.addLayer(SPI1yMed05sum, colorbarOptions1, 'SPI1yMed05sum');
+
+var SPI1yMed05fal = SPI1y05GRASSfal.median();
+Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+
+// // //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed05win,
+  description: 'SPI1yMed05win',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed05spr,
+  description: 'SPI1yMed05spr',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed05sum,
+  description: 'SPI1yMed05sum',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed05fal,
+  description: 'SPI1yMed05fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+////------------------------------------------------------------------------Grass SPI 2006
+var dS = '2006-01-01';
+var dE = '2006-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+//-------------------------------------------Select 1yr SPI from dataset
+var SPI1y06 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2006').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2006
+var cdl06 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2006-07-01', '2006-07-31'))// Get 2006 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl06') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass06 = cdl06.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+//Create geometry from "maskedGrass"
+var grass06geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass06geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y06GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2006-01-01', '2006-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y06GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2006-04-01', '2006-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y06GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2006-07-01', '2006-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y06GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2006-10-01', '2007-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph06win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y06GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph06win,SPI1y06GRASSwin,'grassSPI1yrgraph06win' );
+
+var grassSPI1yrgraph06spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y06GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph06spr,SPI1y06GRASSspr,'grassSPI1yrgraph06spr' );
+
+var grassSPI1yrgraph06sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y06GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph06sum,SPI1y06GRASSsum,'grassSPI1yrgraph06sum' );
+
+var grassSPI1yrgraph06fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y06GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph06fal,SPI1y06GRASSfal,'grassSPI1yrgraph06fal' );
+
+//Add SPI map layer
+var SPI1yMed06win = SPI1y06GRASSwin.median();
+Map.addLayer(SPI1yMed06win, colorbarOptions1, 'SPI1yMed06win');
+
+var SPI1yMed06spr = SPI1y06GRASSspr.median();
+Map.addLayer(SPI1yMed06spr, colorbarOptions1, 'SPI1yMed06spr');
+
+var SPI1yMed06sum = SPI1y06GRASSsum.median();
+Map.addLayer(SPI1yMed06sum, colorbarOptions1, 'SPI1yMed06sum');
+
+var SPI1yMed06fal = SPI1y06GRASSfal.median();
+Map.addLayer(SPI1yMed06fal, colorbarOptions1, 'SPI1yMed06fal');
+
+// // //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed06win,
+  description: 'SPI1yMed06win',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed06spr,
+  description: 'SPI1yMed06spr',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed06sum,
+  description: 'SPI1yMed06sum',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed06fal,
+  description: 'SPI1yMed06fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+////-------------------------------------------------------------Grass SPI 2007
+var dS = '2007-01-01';
+var dE = '2007-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y07 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2006').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2007
+var cdl07 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2006-07-01', '2006-07-31'))// Get 2006 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl07') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass07 = cdl07.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+//// Create geometry from "maskedGrass"
+var grass07geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass07geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y07GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2007-01-01', '2007-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y07GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2007-04-01', '2007-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y07GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2007-07-01', '2007-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y07GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2007-10-01', '2008-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+
+var grassSPI1yrgraph07win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y07GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph07win,SPI1y07GRASSwin,'grassSPI1yrgraph07win' );
+
+var grassSPI1yrgraph07spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y07GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph07spr,SPI1y07GRASSspr,'grassSPI1yrgraph07spr' );
+
+var grassSPI1yrgraph07sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y07GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph07sum,SPI1y07GRASSsum,'grassSPI1yrgraph07sum' );
+
+var grassSPI1yrgraph07fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y07GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph07fal,SPI1y07GRASSfal,'grassSPI1yrgraph07fal' );
+
+//Add SPI map layer
+var SPI1yMed07win = SPI1y07GRASSwin.median();
+Map.addLayer(SPI1yMed07win, colorbarOptions1, 'SPI1yMed07win');
+
+var SPI1yMed07spr = SPI1y07GRASSspr.median();
+Map.addLayer(SPI1yMed07spr, colorbarOptions1, 'SPI1yMed07spr');
+
+var SPI1yMed07sum = SPI1y07GRASSsum.median();
+Map.addLayer(SPI1yMed07sum, colorbarOptions1, 'SPI1yMed07sum');
+
+var SPI1yMed07fal = SPI1y07GRASSfal.median();
+Map.addLayer(SPI1yMed07fal, colorbarOptions1, 'SPI1yMed07fal');
+
+// // //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed07win,
+  description: 'SPI1yMed07win',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed07spr,
+  description: 'SPI1yMed07spr',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed07sum,
+  description: 'SPI1yMed07sum',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed07fal,
+  description: 'SPI1yMed07fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+////------------------------------------------------------------Grass SPI 2008
+var dS = '2008-01-01';
+var dE = '2008-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y08 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2008').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2008
+var cdl08 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2008-07-01', '2008-07-31'))// Get 2008 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl08') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass08 = cdl08.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass08geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass08geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y08GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2008-01-01', '2008-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y08GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2008-04-01', '2008-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y08GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2008-07-01', '2008-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y08GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2008-10-01', '2009-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph08win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y08GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph08win,SPI1y08GRASSwin,'grassSPI1yrgraph08win' );
+
+var grassSPI1yrgraph08spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y08GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph08spr,SPI1y08GRASSspr,'grassSPI1yrgraph08spr' );
+
+var grassSPI1yrgraph08sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y08GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph08sum,SPI1y08GRASSsum,'grassSPI1yrgraph08sum' );
+
+var grassSPI1yrgraph08fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y08GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph08fal,SPI1y08GRASSfal,'grassSPI1yrgraph08fal' );
+
+//Add SPI map layer
+var SPI1yMed08win = SPI1y08GRASSwin.median();
+Map.addLayer(SPI1yMed08win, colorbarOptions1, 'SPI1yMed08win');
+
+var SPI1yMed08spr = SPI1y08GRASSspr.median();
+Map.addLayer(SPI1yMed08spr, colorbarOptions1, 'SPI1yMed08spr');
+
+var SPI1yMed08sum = SPI1y08GRASSsum.median();
+Map.addLayer(SPI1yMed08sum, colorbarOptions1, 'SPI1yMed08sum');
+
+var SPI1yMed08fal = SPI1y08GRASSfal.median();
+Map.addLayer(SPI1yMed08fal, colorbarOptions1, 'SPI1yMed08fal');
+
+// // //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed08win,
+  description: 'SPI1yMed08win',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed08spr,
+  description: 'SPI1yMed08spr',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed08sum,
+  description: 'SPI1yMed08sum',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed08fal,
+  description: 'SPI1yMed08fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+////--------------------------------------------------------------------Grass SPI 2009
+var dS = '2009-01-01';
+var dE = '2009-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y09 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2009').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2009
+var cdl09 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2009-07-01', '2009-07-31'))// Get 2009 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl09') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass09 = cdl09.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass09geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass09geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y09GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2009-01-01', '2009-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y09GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2009-04-01', '2009-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y09GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2009-07-01', '2009-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y09GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2009-10-01', '2010-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph09win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y09GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph09win,SPI1y09GRASSwin,'grassSPI1yrgraph09win' );
+
+var grassSPI1yrgraph09spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y09GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph09spr,SPI1y09GRASSspr,'grassSPI1yrgraph09spr' );
+
+var grassSPI1yrgraph09sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y09GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph09sum,SPI1y09GRASSsum,'grassSPI1yrgraph09sum' );
+
+var grassSPI1yrgraph09fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y09GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph09fal,SPI1y09GRASSfal,'grassSPI1yrgraph09fal' );
+
+//Add SPI map layer
+var SPI1yMed09win = SPI1y09GRASSwin.median();
+Map.addLayer(SPI1yMed09win, colorbarOptions1, 'SPI1yMed09win');
+
+var SPI1yMed09spr = SPI1y09GRASSspr.median();
+Map.addLayer(SPI1yMed09spr, colorbarOptions1, 'SPI1yMed09spr');
+
+var SPI1yMed09sum = SPI1y09GRASSsum.median();
+Map.addLayer(SPI1yMed09sum, colorbarOptions1, 'SPI1yMed09sum');
+
+var SPI1yMed09fal = SPI1y09GRASSfal.median();
+Map.addLayer(SPI1yMed09fal, colorbarOptions1, 'SPI1yMed09fal');
+
+// // //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed09win,
+  description: 'SPI1yMed09win',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed09spr,
+  description: 'SPI1yMed09spr',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed09sum,
+  description: 'SPI1yMed09sum',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed09fal,
+  description: 'SPI1yMed09fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+// //---------------------------------------------------------------------------
+// //Grass SPI 2010
+var dS = '2010-01-01';
+var dE = '2010-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y10 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2010').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2010
+var cdl10 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2010-07-01', '2010-07-31'))// Get 2010 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl10') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass10 = cdl10.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass10geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass10geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y10GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2010-01-01', '2010-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y10GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2010-04-01', '2010-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y10GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2010-07-01', '2010-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y10GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2010-10-01', '2011-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph10win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y10GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph10win,SPI1y10GRASSwin,'grassSPI1yrgraph10win' );
+
+var grassSPI1yrgraph10spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y10GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph10spr,SPI1y10GRASSspr,'grassSPI1yrgraph10spr' );
+
+var grassSPI1yrgraph10sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y10GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph10sum,SPI1y10GRASSsum,'grassSPI1yrgraph10sum' );
+
+var grassSPI1yrgraph10fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y10GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph10fal,SPI1y10GRASSfal,'grassSPI1yrgraph10fal' );
+
+//Add SPI map layer
+var SPI1yMed10win = SPI1y10GRASSwin.median();
+Map.addLayer(SPI1yMed10win, colorbarOptions1, 'SPI1yMed10win');
+
+var SPI1yMed10spr = SPI1y10GRASSspr.median();
+Map.addLayer(SPI1yMed10spr, colorbarOptions1, 'SPI1yMed10spr');
+
+var SPI1yMed10sum = SPI1y10GRASSsum.median();
+Map.addLayer(SPI1yMed10sum, colorbarOptions1, 'SPI1yMed10sum');
+
+var SPI1yMed10fal = SPI1y10GRASSfal.median();
+Map.addLayer(SPI1yMed10fal, colorbarOptions1, 'SPI1yMed10fal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed10win,
+  description: 'SPI1yMed10win',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed10spr,
+  description: 'SPI1yMed10spr',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed10sum,
+  description: 'SPI1yMed10sum',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed10fal,
+  description: 'SPI1yMed10fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+// //---------------------------------------------------------------------------
+// //Grass SPI 2011
+var dS = '2011-01-01';
+var dE = '2011-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y11 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2011').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2011
+var cdl11 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2011-07-01', '2011-07-31'))// Get 2011 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl11') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass11 = cdl11.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "masked"
+var grass11geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass11geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y11GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2011-01-01', '2011-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y11GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2011-04-01', '2011-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y11GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2011-07-01', '2011-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y11GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2011-10-01', '2012-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph11win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y11GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph11win,SPI1y11GRASSwin,'grassSPI1yrgraph11win' );
+
+var grassSPI1yrgraph11spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y11GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph11spr,SPI1y11GRASSspr,'grassSPI1yrgraph11spr' );
+
+var grassSPI1yrgraph11sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y11GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph11sum,SPI1y11GRASSsum,'grassSPI1yrgraph11sum' );
+
+var grassSPI1yrgraph11fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y11GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph11fal,SPI1y11GRASSfal,'grassSPI1yrgraph11fal' );
+
+//Add SPI map layer
+var SPI1yMed11win = SPI1y11GRASSwin.median();
+Map.addLayer(SPI1yMed11win, colorbarOptions1, 'SPI1yMed11win');
+
+var SPI1yMed11spr = SPI1y11GRASSspr.median();
+Map.addLayer(SPI1yMed11spr, colorbarOptions1, 'SPI1yMed11spr');
+
+var SPI1yMed11sum = SPI1y11GRASSsum.median();
+Map.addLayer(SPI1yMed11sum, colorbarOptions1, 'SPI1yMed11sum');
+
+var SPI1yMed11fal = SPI1y11GRASSfal.median();
+Map.addLayer(SPI1yMed11fal, colorbarOptions1, 'SPI1yMed11fal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed11win,
+  description: 'SPI1yMed11win',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed11spr,
+  description: 'SPI1yMed11spr',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed11sum,
+  description: 'SPI1yMed11sum',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed11fal,
+  description: 'SPI1yMed11fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+// //------------------------------------------------------------------------------------
+// //Grass SPI 2012
+var dS = '2012-01-01';
+var dE = '2012-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y11 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2012').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2012
+var cdl12 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2012-07-01', '2012-07-31'))// Get 2012 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl12') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass12 = cdl12.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass12geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass12geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y12GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2012-01-01', '2012-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y12GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2012-04-01', '2012-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y12GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2012-07-01', '2012-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y12GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2012-10-01', '2013-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph12win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y12GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph12win,SPI1y12GRASSwin,'grassSPI1yrgraph12win' );
+
+var grassSPI1yrgraph12spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y12GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph12spr,SPI1y12GRASSspr,'grassSPI1yrgraph12spr' );
+
+var grassSPI1yrgraph12sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y12GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph12sum,SPI1y12GRASSsum,'grassSPI1yrgraph12sum' );
+
+var grassSPI1yrgraph12fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y12GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph12fal,SPI1y12GRASSfal,'grassSPI1yrgraph12fal' );
+
+//Add SPI map layer
+var SPI1yMed12win = SPI1y12GRASSwin.median();
+Map.addLayer(SPI1yMed12win, colorbarOptions1, 'SPI1yMed12win');
+
+var SPI1yMed12spr = SPI1y12GRASSspr.median();
+Map.addLayer(SPI1yMed12spr, colorbarOptions1, 'SPI1yMed12spr');
+
+var SPI1yMed12sum = SPI1y12GRASSsum.median();
+Map.addLayer(SPI1yMed12sum, colorbarOptions1, 'SPI1yMed12sum');
+
+var SPI1yMed12fal = SPI1y12GRASSfal.median();
+Map.addLayer(SPI1yMed12fal, colorbarOptions1, 'SPI1yMed12fal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed12win,
+  description: 'SPI1yMed12win',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed12spr,
+  description: 'SPI1yMed12spr',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed12sum,
+  description: 'SPI1yMed12sum',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed12fal,
+  description: 'SPI1yMed12fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+// //-------------------------------------------------------------------Grass SPI 2013
+var dS = '2013-01-01';
+var dE = '2013-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y13 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2013').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2013
+var cdl13 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2013-07-01', '2013-07-31'))// Get 2013 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl13') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass13 = cdl13.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass13geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass13geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y13GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2013-01-01', '2013-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y13GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2013-04-01', '2013-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y13GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2013-07-01', '2013-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y13GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2013-10-01', '2014-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph13win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y13GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph13win,SPI1y13GRASSwin,'grassSPI1yrgraph13win' );
+
+var grassSPI1yrgraph13spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y13GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph13spr,SPI1y13GRASSspr,'grassSPI1yrgraph13spr' );
+
+var grassSPI1yrgraph13sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y13GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph13sum,SPI1y13GRASSsum,'grassSPI1yrgraph13sum' );
+
+var grassSPI1yrgraph13fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y13GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph13fal,SPI1y13GRASSfal,'grassSPI1yrgraph13fal' );
+
+//Add SPI map layer
+var SPI1yMed13win = SPI1y13GRASSwin.median();
+Map.addLayer(SPI1yMed13win, colorbarOptions1, 'SPI1yMed13win');
+
+var SPI1yMed13spr = SPI1y13GRASSspr.median();
+Map.addLayer(SPI1yMed13spr, colorbarOptions1, 'SPI1yMed13spr');
+
+var SPI1yMed13sum = SPI1y13GRASSsum.median();
+Map.addLayer(SPI1yMed13sum, colorbarOptions1, 'SPI1yMed13sum');
+
+var SPI1yMed13fal = SPI1y13GRASSfal.median();
+Map.addLayer(SPI1yMed13fal, colorbarOptions1, 'SPI1yMed13fal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed13win,
+  description: 'SPI1yMed13win',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed13spr,
+  description: 'SPI1yMed13spr',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed13sum,
+  description: 'SPI1yMed13sum',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed13fal,
+  description: 'SPI1yMed13fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+// //--------------------------------------------------------------------------------
+// //Grass SPI 2014
+var dS = '2014-01-01';
+var dE = '2014-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y14 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2014').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2014
+var cdl14 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2014-07-01', '2014-07-31'))// Get 2014 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl14') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass14 = cdl14.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+//// Create geometry from "maskedGrass"
+var grass14geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass14geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y14GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2014-01-01', '2014-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y14GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2014-04-01', '2014-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y14GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2014-07-01', '2014-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y14GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2014-10-01', '2015-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph14win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y14GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph14win,SPI1y14GRASSwin,'grassSPI1yrgraph14win' );
+
+var grassSPI1yrgraph14spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y14GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph14spr,SPI1y14GRASSspr,'grassSPI1yrgraph14spr' );
+
+var grassSPI1yrgraph14sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y14GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph14sum,SPI1y14GRASSsum,'grassSPI1yrgraph14sum' );
+
+var grassSPI1yrgraph14fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y14GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph14fal,SPI1y14GRASSfal,'grassSPI1yrgraph14fal' );
+
+//Add SPI map layer
+var SPI1yMed14win = SPI1y14GRASSwin.median();
+Map.addLayer(SPI1yMed14win, colorbarOptions1, 'SPI1yMed14win');
+
+var SPI1yMed14spr = SPI1y14GRASSspr.median();
+Map.addLayer(SPI1yMed14spr, colorbarOptions1, 'SPI1yMed14spr');
+
+var SPI1yMed14sum = SPI1y14GRASSsum.median();
+Map.addLayer(SPI1yMed14sum, colorbarOptions1, 'SPI1yMed14sum');
+
+var SPI1yMed14fal = SPI1y14GRASSfal.median();
+Map.addLayer(SPI1yMed14fal, colorbarOptions1, 'SPI1yMed14fal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed14win,
+  description: 'SPI1yMed14win',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed14spr,
+  description: 'SPI1yMed14spr',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed14sum,
+  description: 'SPI1yMed14sum',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed14fal,
+  description: 'SPI1yMed14fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+// //--------------------------------------------------------------------------------Grass SPI 2015
+var dS = '2015-01-01';
+var dE = '2015-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y15 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2015').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2015
+var cdl15 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2015-07-01', '2015-07-31'))// Get 2015 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl15') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass15 = cdl15.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass15geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass15geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y15GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2015-01-01', '2015-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y15GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2015-04-01', '2015-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y15GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2015-07-01', '2015-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y15GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2015-10-01', '2016-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph15win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y15GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph15win,SPI1y15GRASSwin,'grassSPI1yrgraph15win' );
+
+var grassSPI1yrgraph15spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y15GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph15spr,SPI1y15GRASSspr,'grassSPI1yrgraph15spr' );
+
+var grassSPI1yrgraph15sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y15GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph15sum,SPI1y15GRASSsum,'grassSPI1yrgraph15sum' );
+
+var grassSPI1yrgraph15fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y15GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph15fal,SPI1y15GRASSfal,'grassSPI1yrgraph15fal' );
+
+
+//Add SPI map layer
+var SPI1yMed15win = SPI1y15GRASSwin.median();
+Map.addLayer(SPI1yMed15win, colorbarOptions1, 'SPI1yMed15win');
+
+var SPI1yMed15spr = SPI1y15GRASSspr.median();
+Map.addLayer(SPI1yMed15spr, colorbarOptions1, 'SPI1yMed15spr');
+
+var SPI1yMed15sum = SPI1y15GRASSsum.median();
+Map.addLayer(SPI1yMed15sum, colorbarOptions1, 'SPI1yMed15sum');
+
+var SPI1yMed15fal = SPI1y15GRASSfal.median();
+Map.addLayer(SPI1yMed15fal, colorbarOptions1, 'SPI1yMed15fal');
+
+//------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed15win,
+  description: 'SPI1yMed15win',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed15spr,
+  description: 'SPI1yMed15spr',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed15sum,
+  description: 'SPI1yMed15sum',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed15fal,
+  description: 'SPI1yMed15fal',
+  scale: 4000,
+  region:Cimarron,
+});
+//----------------------------------------------------
+// //Grass SPI 2016
+var dS = '2016-01-01';
+var dE = '2016-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y16 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2016').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2016
+var cdl16 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2016-07-01', '2016-07-31'))// Get 2016 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl16') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass16 = cdl16.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass16geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass16geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y16GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2016-01-01', '2016-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y16GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2016-04-01', '2016-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y16GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2016-07-01', '2016-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y16GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2016-10-01', '2017-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph16win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y16GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph16win,SPI1y16GRASSwin,'grassSPI1yrgraph16win' );
+
+var grassSPI1yrgraph16spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y16GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph16spr,SPI1y16GRASSspr,'grassSPI1yrgraph16spr' );
+
+var grassSPI1yrgraph16sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y16GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph16sum,SPI1y16GRASSsum,'grassSPI1yrgraph16sum' );
+
+var grassSPI1yrgraph16fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y16GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph16fal,SPI1y16GRASSfal,'grassSPI1yrgraph16fal' );
+
+//Add SPI map layer
+var SPI1yMed16win = SPI1y16GRASSwin.median();
+Map.addLayer(SPI1yMed16win, colorbarOptions1, 'SPI1yMed16win');
+
+var SPI1yMed16spr = SPI1y16GRASSspr.median();
+Map.addLayer(SPI1yMed16spr, colorbarOptions1, 'SPI1yMed16spr');
+
+var SPI1yMed16sum = SPI1y16GRASSsum.median();
+Map.addLayer(SPI1yMed16sum, colorbarOptions1, 'SPI1yMed16sum');
+
+var SPI1yMed16fal = SPI1y16GRASSfal.median();
+Map.addLayer(SPI1yMed16fal, colorbarOptions1, 'SPI1yMed16fal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed16win,
+  description: 'SPI1yMed16win',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed16spr,
+  description: 'SPI1yMed16spr',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed16sum,
+  description: 'SPI1yMed16sum',
+  scale: 4000,
+  region:Cimarron,
+});
+//Export images
+Export.image.toDrive({
+  image: SPI1yMed16fal,
+  description: 'SPI1yMed16fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+// //--------------------------------------------------------------------------Grass SPI 2017
+var dS = '2017-01-01';
+var dE = '2017-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y17 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2017').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2017
+var cdl17 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2017-07-01', '2017-07-31'))// Get 2017 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl17') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass17 = cdl17.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass17geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass17geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y17GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2017-01-01', '2017-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y17GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2017-04-01', '2017-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y17GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2017-07-01', '2017-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y17GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2017-10-01', '2018-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph17win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y17GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph17win,SPI1y17GRASSwin,'grassSPI1yrgraph17win' );
+
+var grassSPI1yrgraph17spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y17GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph17spr,SPI1y17GRASSspr,'grassSPI1yrgraph17spr' );
+
+var grassSPI1yrgraph17sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y17GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph17sum,SPI1y17GRASSsum,'grassSPI1yrgraph17sum' );
+
+var grassSPI1yrgraph17fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y17GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph17fal,SPI1y17GRASSfal,'grassSPI1yrgraph17fal' );
+
+//Add SPI map layer
+var SPI1yMed17win = SPI1y17GRASSwin.median();
+Map.addLayer(SPI1yMed17win, colorbarOptions1, 'SPI1yMed17win');
+
+var SPI1yMed17spr = SPI1y17GRASSspr.median();
+Map.addLayer(SPI1yMed17spr, colorbarOptions1, 'SPI1yMed17spr');
+
+var SPI1yMed17sum = SPI1y17GRASSsum.median();
+Map.addLayer(SPI1yMed17sum, colorbarOptions1, 'SPI1yMed17sum');
+
+var SPI1yMed17fal = SPI1y17GRASSfal.median();
+Map.addLayer(SPI1yMed17fal, colorbarOptions1, 'SPI1yMed17fal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed17win,
+  description: 'SPI1yMed17win',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed17spr,
+  description: 'SPI1yMed17spr',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed17sum,
+  description: 'SPI1yMed17sum',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed17fal,
+  description: 'SPI1yMed17fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+// //--------------------------------------------------------------------------------
+// //Grass SPI 2018
+var dS = '2018-01-01';
+var dE = '2018-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y18 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2018').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2018
+var cdl18 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2018-07-01', '2018-07-31'))// Get 2018 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl18') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass18 = cdl18.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass18geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass18geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y18GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2018-01-01', '2018-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y18GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2018-04-01', '2018-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y18GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2018-07-01', '2018-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y18GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2018-10-01', '2019-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph18win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y18GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph18win,SPI1y18GRASSwin,'grassSPI1yrgraph18win' );
+
+var grassSPI1yrgraph18spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y18GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph18spr,SPI1y18GRASSspr,'grassSPI1yrgraph18spr' );
+
+var grassSPI1yrgraph18sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y18GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph18sum,SPI1y18GRASSsum,'grassSPI1yrgraph18sum' );
+
+var grassSPI1yrgraph18fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y18GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph18fal,SPI1y18GRASSfal,'grassSPI1yrgraph18fal' );
+
+//Add SPI map layer
+var SPI1yMed18win = SPI1y18GRASSwin.median();
+Map.addLayer(SPI1yMed18win, colorbarOptions1, 'SPI1yMed18win');
+
+var SPI1yMed18spr = SPI1y18GRASSspr.median();
+Map.addLayer(SPI1yMed18spr, colorbarOptions1, 'SPI1yMed18spr');
+
+var SPI1yMed18sum = SPI1y18GRASSsum.median();
+Map.addLayer(SPI1yMed18sum, colorbarOptions1, 'SPI1yMed18sum');
+
+var SPI1yMed18fal = SPI1y18GRASSfal.median();
+Map.addLayer(SPI1yMed18fal, colorbarOptions1, 'SPI1yMed18fal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed18win,
+  description: 'SPI1yMed18win',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed18spr,
+  description: 'SPI1yMed18spr',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed18sum,
+  description: 'SPI1yMed18sum',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed18fal,
+  description: 'SPI1yMed18fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+// //--------------------------------------------------------------------------Grass SPI 2019
+var dS = '2019-01-01';
+var dE = '2019-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y19 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2019').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2019
+var cdl19 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2019-07-01', '2019-07-31'))// Get 2019 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl19') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass19 = cdl19.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass19geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass19geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y19GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2019-01-01', '2019-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y19GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2019-04-01', '2019-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y19GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2019-07-01', '2019-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y19GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2019-10-01', '2020-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph19win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y19GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph19win,SPI1y19GRASSwin,'grassSPI1yrgraph19win' );
+
+var grassSPI1yrgraph19spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y19GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph19spr,SPI1y19GRASSspr,'grassSPI1yrgraph19spr' );
+
+var grassSPI1yrgraph19sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y19GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph19sum,SPI1y19GRASSsum,'grassSPI1yrgraph19sum' );
+
+var grassSPI1yrgraph19fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y19GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph19fal,SPI1y19GRASSfal,'grassSPI1yrgraph19fal' );
+
+//Add SPI map layer
+var SPI1yMed19win = SPI1y19GRASSwin.median();
+Map.addLayer(SPI1yMed19win, colorbarOptions1, 'SPI1yMed19win');
+
+var SPI1yMed19spr = SPI1y19GRASSspr.median();
+Map.addLayer(SPI1yMed19spr, colorbarOptions1, 'SPI1yMed19spr');
+
+var SPI1yMed19sum = SPI1y19GRASSsum.median();
+Map.addLayer(SPI1yMed19sum, colorbarOptions1, 'SPI1yMed19sum');
+
+var SPI1yMed19fal = SPI1y19GRASSfal.median();
+Map.addLayer(SPI1yMed19fal, colorbarOptions1, 'SPI1yMed19fal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed19win,
+  description: 'SPI1yMed19win',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed19spr,
+  description: 'SPI1yMed19spr',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed19sum,
+  description: 'SPI1yMed19sum',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed19fal,
+  description: 'SPI1yMed19fal',
+  scale: 4000,
+  region:Cimarron,
+});
+
+// //--------------------------------------------------------------------------------
+// //Grass SPI 2020
+var dS = '2020-01-01';
+var dE = '2020-12-31';
+var dSUTC = ee.Date(dS, 'GMT');
+var dEUTC = ee.Date(dE, 'GMT');
+var filtered = collection.filterDate(dSUTC, dEUTC.advance(1, 'year'));
+
+var CimFiltered = filtered.filterBounds(Cimarron);
+
+print(CimFiltered.aggregate_array('system:index'));
+
+// Select 1yr SPI from dataset
+var SPI1y20 = CimFiltered.select('spi1y');
+
+// Create color palette and set ranges
+var usdmColors = "0000aa,0000ff,00aaff,00ffff,aaff55,ffffff,ffff00,fcd37f,ffaa00,e60000,730000";
+var minColorbar= -2.5;
+var maxColorbar= 2.5;
+var colorbarOptions1 = {
+  'min':minColorbar,
+  'max':maxColorbar,
+  'palette': usdmColors
+};
+
+var cdl= ee.Image('USDA/NASS/CDL/2020').select('cropland').clip(Cimarron);
+
+//// Create mask to isolate grasslands
+var maskedGrass = ee.Image(cdl)
+  .updateMask((cdl.eq(176)) );
+
+// CDL data 2020
+var cdl20 = ee.ImageCollection('USDA/NASS/CDL')
+                          .filter(ee.Filter.date('2020-07-01', '2020-07-31'))// Get 2020 Data
+                          .select(0) // Get Landcover band integer
+                          .aside(print,'cdl20') //Returns ImageCollection with 1 element
+                          .map(function(image) { return image.clip(Cimarron); });
+
+var cdlGrass20 = cdl20.map(function(image){
+  return image.remap([176, 176, 176, 176, 176, 176],
+                      [176, 176, 176, 176, 176, 176]);
+});
+
+// // Create geometry from "maskedGrass"
+var grass20geo = maskedGrass.reduceToVectors({
+  geometry: Cimarron,
+  scale: 4000,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+});
+print(grass20geo);
+
+// Land use type-specific SPI Calculations
+var SPI1y20GRASSwin = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2020-01-01', '2020-04-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y20GRASSspr = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2020-04-01', '2020-07-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y20GRASSsum = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2020-07-01', '2020-10-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+var SPI1y20GRASSfal = CimFiltered.select('spi1y')
+                .filter(ee.Filter.date('2020-10-01', '2021-01-01'))
+                .filterBounds(Cimarron)
+                .map(function(img) {return img.clip(Cimarron)});
+
+var grassSPI1yrgraph20win = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y20GRASSwin,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph20win,SPI1y20GRASSwin,'grassSPI1yrgraph20win' );
+
+var grassSPI1yrgraph20spr = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y20GRASSspr,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph20spr,SPI1y20GRASSspr,'grassSPI1yrgraph20spr' );
+
+var grassSPI1yrgraph20sum = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y20GRASSsum,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph20sum,SPI1y20GRASSsum,'grassSPI1yrgraph20sum' );
+
+var grassSPI1yrgraph20fal = ui.Chart.image.seriesByRegion({
+  imageCollection: SPI1y20GRASSfal,
+  regions: Cimarron,
+  reducer: ee.Reducer.median(),
+  scale: 30, //spatial scale of product
+});
+print(grassSPI1yrgraph20fal,SPI1y20GRASSfal,'grassSPI1yrgraph20fal' );
+
+//Add SPI map layer
+var SPI1yMed20win = SPI1y20GRASSwin.median();
+Map.addLayer(SPI1yMed20win, colorbarOptions1, 'SPI1yMed20win');
+
+var SPI1yMed20spr = SPI1y20GRASSspr.median();
+Map.addLayer(SPI1yMed20spr, colorbarOptions1, 'SPI1yMed20spr');
+
+var SPI1yMed20sum = SPI1y20GRASSsum.median();
+Map.addLayer(SPI1yMed20sum, colorbarOptions1, 'SPI1yMed20sum');
+
+var SPI1yMed20fal = SPI1y20GRASSfal.median();
+Map.addLayer(SPI1yMed20fal, colorbarOptions1, 'SPI1yMed20fal');
+
+// //------------------------------------------------------------------//Export images
+Export.image.toDrive({
+  image: SPI1yMed20win,
+  description: 'SPI1yMed20win',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed20spr,
+  description: 'SPI1yMed20spr',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed20sum,
+  description: 'SPI1yMed20sum',
+  scale: 4000,
+  region:Cimarron,
+});
+
+Export.image.toDrive({
+  image: SPI1yMed20fal,
+  description: 'SPI1yMed20fal',
+  scale: 4000,
+  region:Cimarron,
+});
