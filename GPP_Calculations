@@ -64,16 +64,16 @@ var grass05gppSum = gppGrass05sum.select('GPP')
 var grass05gppFal = gppGrass05fal.select('GPP')
 //------------------------------------------------------------------//Add map layer of median grass GPP
 var grassGPP05medWin = grass05gppWin.median();
-Map.addLayer(grassGPP10medWin, gppVis, 'grassGPP10medWin');
+Map.addLayer(grassGPP05medWin, gppVis, 'grassGPP05medWin');
 
 var grassGPP05medSpr = grass05gppSpr.median();
-Map.addLayer(grassGPP10medSpr, gppVis, 'grassGPP10medSpr');
+Map.addLayer(grassGPP05medSpr, gppVis, 'grassGPP05medSpr');
 
 var grassGPP05medSum = grass05gppSum.median();
-Map.addLayer(grassGPP10medSum, gppVis, 'grassGPP10medSum');
+Map.addLayer(grassGPP05medSum, gppVis, 'grassGPP05medSum');
 
 var grassGPP05medFal = grass05gppFal.median();
-Map.addLayer(grassGPP10medFal, gppVis, 'grassGPP10medFal');
+Map.addLayer(grassGPP05medFal, gppVis, 'grassGPP05medFal');
 
 //---------------------------------------------------------------------//Prints one median value for entire year
 var grassGPP_2005_medValWin = grassGPP05medWin.reduceRegion({
@@ -234,16 +234,16 @@ var grass06gppFal = gppGrass06fal.select('GPP')
 
 //------------------------------------------------------------------//Add map layer of median grass GPP
 var grassGPP06medWin = grass06gppWin.median();
-Map.addLayer(grassGPP10medWin, gppVis, 'grassGPP10medWin');
+Map.addLayer(grassGPP06medWin, gppVis, 'grassGPP06medWin');
 
 var grassGPP06medSpr = grass06gppSpr.median();
-Map.addLayer(grassGPP10medSpr, gppVis, 'grassGPP10medSpr');
+Map.addLayer(grassGPP06medSpr, gppVis, 'grassGPP06medSpr');
 
 var grassGPP06medSum = grass06gppSum.median();
-Map.addLayer(grassGPP10medSum, gppVis, 'grassGPP10medSum');
+Map.addLayer(grassGPP06medSum, gppVis, 'grassGPP06medSum');
 
 var grassGPP06medFal = grass06gppFal.median();
-Map.addLayer(grassGPP10medFal, gppVis, 'grassGPP10medFal');
+Map.addLayer(grassGPP06medFal, gppVis, 'grassGPP06medFal');
 
 //---------------------------------------------------------------------//Prints one median value for entire year
 var grassGPP_2006_medValWin = grassGPP06medWin.reduceRegion({
@@ -403,16 +403,16 @@ var grass07gppFal = gppGrass07fal.select('GPP')
 
 //------------------------------------------------------------------//Add map layer of median grass GPP
 var grassGPP07medWin = grass07gppWin.median();
-Map.addLayer(grassGPP10medWin, gppVis, 'grassGPP10medWin');
+Map.addLayer(grassGPP07medWin, gppVis, 'grassGPP07medWin');
 
 var grassGPP07medSpr = grass07gppSpr.median();
-Map.addLayer(grassGPP10medSpr, gppVis, 'grassGPP10medSpr');
+Map.addLayer(grassGPP07medSpr, gppVis, 'grassGPP07medSpr');
 
 var grassGPP07medSum = grass07gppSum.median();
-Map.addLayer(grassGPP10medSum, gppVis, 'grassGPP10medSum');
+Map.addLayer(grassGPP07medSum, gppVis, 'grassGPP07medSum');
 
 var grassGPP07medFal = grass07gppFal.median();
-Map.addLayer(grassGPP10medFal, gppVis, 'grassGPP10medFal');
+Map.addLayer(grassGPP07medFal, gppVis, 'grassGPP07medFal');
 
 //---------------------------------------------------------------------//Prints one median value for entire year
 var grassGPP_2007_medValWin = grassGPP07medWin.reduceRegion({
@@ -568,16 +568,16 @@ var grass08gppFal = gppGrass08fal.select('GPP')
 
 //------------------------------------------------------------------//Add map layer of median grass GPP
 var grassGPP08medWin = grass08gppWin.median();
-Map.addLayer(grassGPP10medWin, gppVis, 'grassGPP10medWin');
+Map.addLayer(grassGPP08medWin, gppVis, 'grassGPP08medWin');
 
 var grassGPP08medSpr = grass08gppSpr.median();
-Map.addLayer(grassGPP10medSpr, gppVis, 'grassGPP10medSpr');
+Map.addLayer(grassGPP08medSpr, gppVis, 'grassGPP08medSpr');
 
 var grassGPP08medSum = grass08gppSum.median();
-Map.addLayer(grassGPP10medSum, gppVis, 'grassGPP10medSum');
+Map.addLayer(grassGPP08medSum, gppVis, 'grassGPP08medSum');
 
 var grassGPP08medFal = grass08gppFal.median();
-Map.addLayer(grassGPP10medFal, gppVis, 'grassGPP10medFal');
+Map.addLayer(grassGPP08medFal, gppVis, 'grassGPP08medFal');
 
 //---------------------------------------------------------------------//Prints one median value for entire year
 var grassGPP_2008_medValWin = grassGPP08medWin.reduceRegion({
@@ -737,16 +737,16 @@ var grass09gppFal = gppGrass09fal.select('GPP')
 
 //------------------------------------------------------------------//Add map layer of median grass GPP
 var grassGPP09medWin = grass09gppWin.median();
-Map.addLayer(grassGPP10medWin, gppVis, 'grassGPP10medWin');
+Map.addLayer(grassGPP09medWin, gppVis, 'grassGPP09medWin');
 
 var grassGPP09medSpr = grass09gppSpr.median();
-Map.addLayer(grassGPP10medSpr, gppVis, 'grassGPP10medSpr');
+Map.addLayer(grassGPP09medSpr, gppVis, 'grassGPP09medSpr');
 
 var grassGPP09medSum = grass09gppSum.median();
-Map.addLayer(grassGPP10medSum, gppVis, 'grassGPP10medSum');
+Map.addLayer(grassGPP09medSum, gppVis, 'grassGPP09medSum');
 
 var grassGPP09medFal = grass09gppFal.median();
-Map.addLayer(grassGPP10medFal, gppVis, 'grassGPP10medFal');
+Map.addLayer(grassGPP09medFal, gppVis, 'grassGPP09medFal');
 
 //---------------------------------------------------------------------//Prints one median value for entire year
 var grassGPP_2009_medValWin = grassGPP09medWin.reduceRegion({
