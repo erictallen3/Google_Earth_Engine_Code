@@ -1,0 +1,930 @@
+// Create palette for display of gNDVI
+var gndvi_pal = ['#d73027', '#f46d43', '#fdae61', '#fee08b', '#d9ef8b',
+'#a6d96a'];
+
+//Create RGB visualization
+var visualization = {
+  min: 0.0,
+  max: 0.3,
+  bands: ['B4', 'B3', 'B2'],
+};
+
+////Set GNDVI bands
+var nirBand = 'B8';
+var greenBand = 'B3';
+
+//Create cloud mask function
+function maskS2clouds(image) {
+  var qa = image.select('QA60');
+  // Bits 10 and 11 are clouds and cirrus, respectively.
+  var cloudBitMask = 1 << 10;
+  var cirrusBitMask = 1 << 11;
+  // Both flags should be set to zero, indicating clear conditions.
+  var mask2 = qa.bitwiseAnd(cloudBitMask).eq(0)
+      .and(qa.bitwiseAnd(cirrusBitMask).eq(0));
+  return image.updateMask(mask2).divide(10000);
+}
+
+
+
+var globalSent2021 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+                          .filter(ee.Filter.date('2021-07-21', '2021-07-30'))// Get 2006 Data
+                          .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',60))
+                          .map(maskS2clouds)
+                          // .map(function(image) {return image.clip(Banke2020geo)})
+                          //.select('B3','B8','QA60')
+                          ;
+
+//Map.addLayer(globalSent2021,visualization, 'globalSent2021')
+var globalSent2021mean = globalSent2021.mean();
+//print(globalSent2021mean,'globalSent2021mean')
+//Map.addLayer(globalSent2021mean,visualization, 'globalSent2021mean')
+
+////Calc GNDVI
+var global2021gndvi = globalSent2021mean.normalizedDifference([nirBand, greenBand]);
+//print(global2021gndvi,"global2021gndvi" )
+//Map.addLayer(global2021gndvi,{min:-0.1, max:1, palette: gndvi_pal}, 'global2021gndvi')
+
+// //No cloud mask
+// var riceSentCloudsIncluded2021 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+//                           .filter(ee.Filter.date('2021-07-01', '2021-07-10'))// Get 2006 Data
+//                           //.select(0) // Get Landcover band integer
+//                           //.aside(print,'cdl2006') //Returns ImageCollection with 1 element
+//                           //.map(maskS2clouds)
+//                           //.map(function(image) {return image.clip(Banke2020geo)})
+//                           .select('B3','B8','QA60');
+
+// var riceSentCloudsIncluded2021mean = riceSentCloudsIncluded2021.mean();
+// //print(riceSentCloudsIncluded2021mean,'riceSentCloudsIncluded2021mean')
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////2021
+var Banke2021bound = ee.Image(Banke2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Banke2021bound,'Banke2021bound')
+Map.addLayer(Banke2021bound, {}, 'Banke2021bound')
+
+// // Create geometry 
+var Banke2021geo = Banke2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Banke2021gndviClip = global2021gndvi.clip(Banke2021geo);
+print(Banke2021gndviClip, 'Banke2021gndviClip')
+Map.addLayer(Banke2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Banke2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Banke2021gndviClip,
+  description: 'Banke2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Banke2021bound,
+});
+
+// ////Calc GNDVI
+// var Banke2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+// print(Banke2021gndviCloudyPix,"Banke2021gndviClouds" )
+// //Map.addLayer(Banke2020gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Banke2020gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Banke2020gndviCloudyPix,
+//   description: 'Banke2020gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region:Banke2020bound,
+// });
+
+//////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////2021
+var Bara2021bound = ee.Image(Bara2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Bara2021bound,'Bara2021bound')
+Map.addLayer(Bara2021bound, {}, 'Bara2021bound')
+
+// // Create geometry 
+var Bara2021geo = Bara2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Bara2021gndviClip = global2021gndvi.clip(Bara2021geo);
+//print(Bara2021gndviClip, 'Bara2021gndviClip')
+//Map.addLayer(Bara2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Bara2021gndviClip")
+
+////Export the image//////////////////
+Export.image.toDrive({
+  image: Bara2021gndviClip,
+  description: 'Bara2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Bara2021bound,
+});
+
+// ////Calc GNDVI
+// var Bara2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+// print(Bara2021gndviCloudyPix,"Bara2021gndviClouds" )
+// //Map.addLayer(Bara2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Bara2021gndviCloudyPix')
+
+// // ////Export the image
+// // Export.image.toDrive({
+// //   image: Bara2021gndviCloudyPix,
+// //   description: 'Bara2021gndviCloudyPix',
+// //   scale: 10,
+// //   maxPixels: 3784216672400,
+// //   region:Bara2021bound,
+// // });
+
+
+////////////////////////////////////////////////2021
+var Bardiya2021bound = ee.Image(Bardiya2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Bardiya2021bound,'Bardiya2021bound')
+Map.addLayer(Bardiya2021bound, {}, 'Bardiya2021bound')
+
+// // Create geometry 
+var Bardiya2021geo = Bardiya2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Bardiya2021gndviClip = global2021gndvi.clip(Bardiya2021geo);
+//print(Bardiya2021gndviClip, 'Bardiya2021gndviClip')
+Map.addLayer(Bardiya2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Bardiya2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Bardiya2021gndviClip,
+  description: 'Bardiya2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Bardiya2021bound,
+});
+
+////Calc GNDVI
+//var Bardiya2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Bardiya2021gndviCloudyPix,"Bardiya2021gndviClouds" )
+//Map.addLayer(Bardiya2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Bardiya2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Bardiya2021gndviCloudyPix,
+//   description: 'Bardiya2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region:Bardiya2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Chitwan2021bound = ee.Image(Chitwan2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Chitwan2021bound,'Chitwan2021bound')
+//Map.addLayer(Chitwan2021bound, {}, 'Chitwan2021bound')
+
+// // Create geometry 
+var Chitwan2021geo = Chitwan2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Chitwan2021gndviClip = global2021gndvi.clip(Chitwan2021geo);
+//print(Chitwan2021gndviClip, 'Chitwan2021gndviClip')
+Map.addLayer(Chitwan2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Chitwan2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Chitwan2021gndviClip,
+  description: 'Chitwan2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Chitwan2021bound,
+});
+
+////Calc GNDVI
+//var Chitwan2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Chitwan2021gndviCloudyPix,"Chitwan2021gndviClouds" )
+//Map.addLayer(Chitwan2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Chitwan2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Chitwan2021gndviCloudyPix,
+//   description: 'Chitwan2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region:Chitwan2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Dang2021bound = ee.Image(Dang2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Dang2021bound,'Dang2021bound')
+Map.addLayer(Dang2021bound, {}, 'Dang2021bound')
+
+// // Create geometry 
+var Dang2021geo = Dang2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+//Map.addLayer(Dang2021geo,{min:-0.1, max:1, palette: gndvi_pal},"Dang2021geo")
+
+var Dang2021gndviClip = global2021gndvi.clip(Dang2021geo);
+//print(Dang2021gndviClip, 'Dang2021gndviClip')
+Map.addLayer(Dang2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Dang2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Dang2021gndviClip,
+  description: 'Dang2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Dang2021bound,
+});
+
+////Calc GNDVI
+//var Dang2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Dang2021gndviCloudyPix,"Dang2021gndviClouds" )
+//Map.addLayer(Dang2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Dang2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Dang2021gndviCloudyPix,
+//   description: 'Dang2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region:Dang2020bound,
+// });
+
+////////////////////////////////////////////////2021
+var Dhanusa2021bound = ee.Image(Dhanusa2020).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Banke2021bound,'Banke2021bound')
+//Map.addLayer(Dhanusa2021bound, {}, 'Dhanusa2021bound')
+
+// // Create geometry 
+var Dhanusa2021geo = Dhanusa2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Dhanusa2021gndviClip = global2021gndvi.clip(Dhanusa2021geo);
+//print(Dhanusa2021gndviClip, 'Dhanusa2021gndviClip')
+Map.addLayer(Dhanusa2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Dhanusa2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Dhanusa2021gndviClip,
+  description: 'Dhanusa2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Dhanusa2021bound,
+});
+
+////Calc GNDVI
+//var Dhanusa2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Dhanusa2021gndviCloudyPix,"Dhanusa2021gndviClouds" )
+//Map.addLayer(Dhanusa2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Dhanusa2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Dhanusa2021gndviCloudyPix,
+//   description: 'Dhanusa2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region:Dhanusa2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Jhapa2021bound = ee.Image(Jhapa2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Jhapa2021bound,'Jhapa2021bound')
+//Map.addLayer(Jhapa2021bound, {}, 'Jhapa2021bound')
+
+// // Create geometry 
+var Jhapa2021geo = Jhapa2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Jhapa2021gndviClip = global2021gndvi.clip(Jhapa2021geo);
+//print(Jhapa2021gndviClip, 'Jhapa2021gndviClip')
+Map.addLayer(Jhapa2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Jhapa2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Jhapa2021gndviClip,
+  description: 'Jhapa2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Jhapa2021bound,
+});
+
+////Calc GNDVI
+//var Jhapa2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Jhapa2021gndviCloudyPix,"Jhapa2021gndviClouds" )
+//Map.addLayer(Jhapa2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Jhapa2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Jhapa2021gndviCloudyPix,
+//   description: 'Jhapa2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Jhapa2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Kailai2021bound = ee.Image(Kailai2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Kailai2021bound,'Kailai2021bound')
+//Map.addLayer(Kailai2021bound, {}, 'Kailai2021bound')
+
+// // Create geometry 
+var Kailai2021geo = Kailai2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Kailai2021gndviClip = global2021gndvi.clip(Kailai2021geo);
+//print(Kailai2021gndviClip, 'Kailai2021gndviClip')
+Map.addLayer(Kailai2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Kailai2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Kailai2021gndviClip,
+  description: 'Kailai2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Kailai2021bound,
+});
+
+////Calc GNDVI
+//var Kailai2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Kailai2021gndviCloudyPix,"Kailai2021gndviClouds" )
+//Map.addLayer(Kailai2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Kailai2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Kailai2021gndviCloudyPix,
+//   description: 'Kailai2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Kailai2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Kanchanpur2021bound = ee.Image(Kanchanpur2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Kanchanpur2021bound,'Kanchanpur2021bound')
+//Map.addLayer(Kanchanpur2021bound, {}, 'Kanchanpur2021bound')
+
+// // Create geometry 
+var Kanchanpur2021geo = Kanchanpur2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Kanchanpur2021gndviClip = global2021gndvi.clip(Kanchanpur2021geo);
+//print(Kanchanpur2021gndviClip, 'Kanchanpur2021gndviClip')
+Map.addLayer(Kanchanpur2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Kanchanpur2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Kanchanpur2021gndviClip,
+  description: 'Kanchanpur2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Kanchanpur2021bound,
+});
+
+////Calc GNDVI
+//var Kanchanpur2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Kanchanpur2021gndviCloudyPix,"Kanchanpur2021gndviClouds" )
+//Map.addLayer(Kanchanpur2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Kanchanpur2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Kanchanpur2021gndviCloudyPix,
+//   description: 'Kanchanpur2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Kanchanpur2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Kapilvastu2021bound = ee.Image(Kapilvastu2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Kapilvastu2021bound,'Kapilvastu2021bound')
+//Map.addLayer(Kapilvastu2021bound, {}, 'Kapilvastu2021bound')
+
+// // Create geometry 
+var Kapilvastu2021geo = Kapilvastu2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Kapilvastu2021gndviClip = global2021gndvi.clip(Kapilvastu2021geo);
+//print(Kapilvastu2021gndviClip, 'Kapilvastu2021gndviClip')
+Map.addLayer(Kapilvastu2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Kapilvastu2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Kapilvastu2021gndviClip,
+  description: 'Kapilvastu2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Kapilvastu2021bound,
+});
+
+////Calc GNDVI
+//var Kapilvastu2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Kapilvastu2021gndviCloudyPix,"Kapilvastu2021gndviClouds" )
+//Map.addLayer(Kapilvastu2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Kapilvastu2021gndviCloudyPix')
+
+// ////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+// Export.image.toDrive({
+//   image: Kapilvastu2021gndviCloudyPix,
+//   description: 'Kapilvastu2021gndviClipCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region:Kapilvastu2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Mahottari2021bound = ee.Image(Mahottari2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Mahottari2021bound,'Mahottari2021bound')
+//Map.addLayer(Mahottari2021bound, {}, 'Mahottari2021bound')
+
+// // Create geometry 
+var Mahottari2021geo = Mahottari2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Mahottari2021gndviClip = global2021gndvi.clip(Mahottari2021geo);
+//print(Mahottari2021gndviClip, 'Mahottari2021gndviClip')
+Map.addLayer(Mahottari2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Mahottari2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Mahottari2021gndviClip,
+  description: 'Mahottari2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Mahottari2021bound,
+});
+
+////Calc GNDVI
+//var Mahottari2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Mahottari2021gndviCloudyPix,"Mahottari2021gndviClouds" )
+//Map.addLayer(Mahottari2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Mahottari2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Mahottari2021gndviCloudyPix,
+//   description: 'Mahottari2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Mahottari2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Morang2021bound = ee.Image(Morang2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Morang2021bound,'Morang2021bound')
+//Map.addLayer(Morang2021bound, {}, 'Morang2021bound')
+
+// // Create geometry 
+var Morang2021geo = Morang2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Morang2021gndviClip = global2021gndvi.clip(Morang2021geo);
+//print(Morang2021gndviClip, 'Morang2021gndviClip')
+Map.addLayer(Morang2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Morang2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Morang2021gndviClip,
+  description: 'Morang2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Morang2021bound,
+});
+
+////Calc GNDVI
+//var Morang2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Morang2021gndviCloudyPix,"Morang2021gndviClouds" )
+//Map.addLayer(Morang2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Morang2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Morang2021gndviCloudyPix,
+//   description: 'Morang2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Morang2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Nawalpur2021bound = ee.Image(Nawalpur2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Nawalpur2021bound,'Nawalpur2021bound')
+//Map.addLayer(Nawalpur2021bound, {}, 'Nawalpur2021bound')
+
+// // Create geometry 
+var Nawalpur2021geo = Nawalpur2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Nawalpur2021gndviClip = global2021gndvi.clip(Nawalpur2021geo);
+//print(Nawalpur2021gndviClip, 'Nawalpur2021gndviClip')
+Map.addLayer(Nawalpur2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Nawalpur2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Nawalpur2021gndviClip,
+  description: 'Nawalpur2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Nawalpur2021bound,
+});
+
+////Calc GNDVI
+//var Nawalpur2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Nawalpur2021gndviCloudyPix,"Nawalpur2021gndviClouds" )
+//Map.addLayer(Nawalpur2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Nawalpur2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Nawalpur2021gndviCloudyPix,
+//   description: 'Nawalpur2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Nawalpur2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Parasi2021bound = ee.Image(Parasi2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Parasi2021bound,'Parasi2021bound')
+//Map.addLayer(Parasi2021bound, {}, 'Parasi2021bound')
+
+// // Create geometry 
+var Parasi2021geo = Parasi2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Parasi2021gndviClip = global2021gndvi.clip(Parasi2021geo);
+//print(Parasi2021gndviClip, 'Parasi2021gndviClip')
+Map.addLayer(Parasi2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Parasi2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Parasi2021gndviClip,
+  description: 'Parasi2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Parasi2021bound,
+});
+
+////Calc GNDVI
+//var Parasi2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Parasi2021gndviCloudyPix,"Parasi2021gndviClouds" )
+//Map.addLayer(Parasi2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Parasi2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Parasi2021gndviCloudyPix,
+//   description: 'Parasi2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Parasi2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Parsa2021bound = ee.Image(Parsa2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Parsa2021bound,'Parsa2021bound')
+//Map.addLayer(Parsa2021bound, {}, 'Parsa2021bound')
+
+// // Create geometry 
+var Parsa2021geo = Parsa2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Parsa2021gndviClip = global2021gndvi.clip(Parsa2021geo);
+//print(Parsa2021gndviClip, 'Parsa2021gndviClip')
+Map.addLayer(Parsa2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Parsa2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Parsa2021gndviClip,
+  description: 'Parsa2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Parsa2021bound,
+});
+
+////Calc GNDVI
+//var Parsa2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Parasi2021gndviCloudyPix,"Parasi2021gndviClouds" )
+//Map.addLayer(Parsa2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Parsa2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Parsa2021gndviCloudyPix,
+//   description: 'Parsa2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Parsa2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Rautahat2021bound = ee.Image(Rautahat2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Rautahat2021bound,'Rautahat2021bound')
+//Map.addLayer(Rautahat2021bound, {}, 'Rautahat2021bound')
+
+// // Create geometry 
+var Rautahat2021geo = Rautahat2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Rautahat2021gndviClip = global2021gndvi.clip(Rautahat2021geo);
+print(Rautahat2021gndviClip, 'Rautahat2021gndviClip')
+Map.addLayer(Rautahat2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Rautahat2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Rautahat2021gndviClip,
+  description: 'Rautahat2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Rautahat2021bound,
+});
+
+
+////////////////////////////////////////////////////////////2020
+var Rupendhi2021bound = ee.Image(Rupendhi2020)
+//print(Rupendhi2020bound,'Rupendhi2020bound')
+Map.addLayer(Rupendhi2021bound, {palette: ['blue']}, 'Rupendhi2020bound')
+
+// // Create geometry 
+var Rupendhi2021geo = Rupendhi2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Rupendhi2021gndviClip = global2021gndvi.clip(Rupendhi2021geo);
+//print(Rupendhi2020gndviClip, 'Rupendhi2020gndviClip')
+Map.addLayer(Rupendhi2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Rupendhi2021gndviClip")
+Map.addLayer(Rupendhi2021geo,{min:-0.1, max:1, palette: gndvi_pal},"Rupendhi2021geo")
+
+////Export the image////////////////////
+Export.image.toDrive({
+  image: Rupendhi2021gndviClip,
+  description: 'Rupendhi2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Rupendhi2021bound,
+});
+
+////Calc GNDVI
+//var Rupendhi2020gndviCloudyPix = riceSentCloudsIncluded2020mean.normalizedDifference([nirBand, greenBand]);
+//print(Rupendhi2020gndviCloudyPix,"Rupendhi2020gndviClouds" )
+//Map.addLayer(Rupendhi2020gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Rupendhi2020gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Rupendhi2020gndviCloudyPix,
+//   description: 'Rupendhi2020gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Rupendhi2020bound,
+// });
+
+
+
+////////////////////////////////////////////////2021
+var Saptari2021bound = ee.Image(Saptari2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Saptari2021bound,'Saptari2021bound')
+//Map.addLayer(Saptari2021bound, {}, 'Saptari2021bound')
+
+// // Create geometry 
+var Saptari2021geo = Saptari2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Saptari2021gndviClip = global2021gndvi.clip(Saptari2021geo);
+//print(Saptari2021gndviClip, 'Saptari2021gndviClip')
+Map.addLayer(Saptari2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Saptari2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Saptari2021gndviClip,
+  description: 'Saptari2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Saptari2021bound,
+});
+
+////Calc GNDVI
+//var Saptari2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Saptari2021gndviCloudyPix,"Saptari2021gndviClouds" )
+//Map.addLayer(Saptari2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Saptari2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Saptari2021gndviCloudyPix,
+//   description: 'Saptari2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Saptari2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Sarlahii2021bound = ee.Image(Sarlahii2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Sarlahii2021bound,'Sarlahii2021bound')
+//Map.addLayer(Sarlahii2021bound, {}, 'Sarlahii2021bound')
+
+// // Create geometry 
+var Sarlahii2021geo = Sarlahii2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Sarlahii2021gndviClip = global2021gndvi.clip(Sarlahii2021geo);
+//print(Sarlahii2021gndviClip, 'Sarlahii2021gndviClip')
+Map.addLayer(Sarlahii2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Sarlahii2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Sarlahii2021gndviClip,
+  description: 'Sarlahii2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Sarlahii2021bound,
+});
+
+////Calc GNDVI
+//var Sarlahii2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Sarlahii2021gndviCloudyPix,"Sarlahii2021gndviClouds" )
+//Map.addLayer(Sarlahii2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Sarlahii2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Sarlahii2021gndviCloudyPix,
+//   description: 'Sarlahii2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Sarlahii2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Siraha2021bound = ee.Image(Siraha2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Siraha2021bound,'Siraha2021bound')
+//Map.addLayer(Siraha2021bound, {}, 'Siraha2021bound')
+
+// // Create geometry 
+var Siraha2021geo = Siraha2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Siraha2021gndviClip = global2021gndvi.clip(Siraha2021geo);
+//print(Siraha2021gndviClip, 'Siraha2021gndviClip')
+Map.addLayer(Siraha2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Siraha2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Siraha2021gndviClip,
+  description: 'Siraha2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Siraha2021bound,
+});
+
+////Calc GNDVI
+//var Siraha2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Siraha2021gndviCloudyPix,"Siraha2021gndviClouds" )
+//Map.addLayer(Siraha2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Siraha2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Siraha2021gndviCloudyPix,
+//   description: 'Siraha2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Siraha2021bound,
+// });
+
+
+////////////////////////////////////////////////2021
+var Sunsari2021bound = ee.Image(Sunsari2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+//print(Sunsari2021bound,'Sunsari2021bound')
+//Map.addLayer(Sunsari2021bound, {}, 'Sunsari2021bound')
+
+// // Create geometry 
+var Sunsari2021geo = Sunsari2021bound.reduceToVectors({
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Sunsari2021gndviClip = global2021gndvi.clip(Sunsari2021geo);
+//print(Sunsari2021gndviClip, 'Sunsari2021gndviClip')
+Map.addLayer(Sunsari2021gndviClip,{min:-0.1, max:1, palette: gndvi_pal},"Sunsari2021gndviClip")
+
+////Export the image////////////////////This uses new method ignoring clipped image, uses global dataset and exports using clip geo
+Export.image.toDrive({
+  image: Sunsari2021gndviClip,
+  description: 'Sunsari2021gndviClip',
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Sunsari2021bound,
+});
+
+
+////Calc GNDVI
+//var Sunsari2021gndviCloudyPix = riceSentCloudsIncluded2021mean.normalizedDifference([nirBand, greenBand]);
+//print(Sunsari2021gndviCloudyPix,"Sunsari2021gndviClouds" )
+//Map.addLayer(Sunsari2021gndviCloudyPix,{min:-0.1, max:0.9, palette: gndvi_pal}, 'Sunsari2021gndviCloudyPix')
+
+// ////Export the image
+// Export.image.toDrive({
+//   image: Sunsari2021gndviCloudyPix,
+//   description: 'Sunsari2021gndviCloudyPix',
+//   scale: 10,
+//   maxPixels: 3784216672400,
+//   region: Sunsari2021bound,
+// });
