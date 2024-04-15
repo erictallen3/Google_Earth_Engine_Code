@@ -1,0 +1,561 @@
+var date = ee.Filter.date('2021-12-18', '2021-12-27');
+
+Map.setCenter(84.67138617733269, 28.02348920026751);
+
+// Define a square, uniform kernel
+//The radius of two (diagonally from the center) allows for a 5x5 pixel area
+var uniformKernel=ee.Kernel.square({
+   radius: 2});
+print(uniformKernel,"uniformKernel") //Visualize matrix in console and look at respective pixel weights
+
+var globalSAR_2020vh = ee.ImageCollection('COPERNICUS/S1_GRD')
+        .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
+        .filter(ee.Filter.eq('instrumentMode', 'IW'))
+        .select('VH')
+        .map(function(image) {
+          var edge = image.lt(-30.0);
+          var maskedImage = image.mask().and(edge.not());
+          return image.updateMask(maskedImage);
+        });
+
+var globalSAR_2020vv = ee.ImageCollection('COPERNICUS/S1_GRD')
+        .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+        .filter(ee.Filter.eq('instrumentMode', 'IW'))
+        .select('VV')
+        .map(function(image) {
+          var edge = image.lt(-30.0);
+          var maskedImage = image.mask().and(edge.not());
+          return image.updateMask(maskedImage);
+        });
+
+var globalSAR_2020angle = ee.ImageCollection('COPERNICUS/S1_GRD')
+        //.filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'angle'))
+        .filter(ee.Filter.eq('instrumentMode', 'IW'))
+        .select('angle')        
+        .map(function(image) {
+          var edge = image.lt(-30.0);
+          var maskedImage = image.mask().and(edge.not());
+          return image.updateMask(maskedImage);
+        });
+
+var VH = globalSAR_2020vh //Not necessary, but wanted variables with shorter names
+var VV = globalSAR_2020vv //Not necessary, but wanted variables with shorter names
+var ANGLE = globalSAR_2020angle //Not necessary, but wanted variables with shorter names
+
+var IMG_VH = ee.Image.cat(VH.filter(date).mean()); //filter the above image collection using the date defined in line 1, then calculate mean to create an image from the image collection
+var IMG_VV = ee.Image.cat(VV.filter(date).mean()); //filter the above image collection using the date defined in line 1, then calculate mean to create an image from the image collection
+var IMG_Angle = ee.Image.cat(ANGLE.filter(date).mean()); //filter the above image collection using the date defined in line 1, then calculate mean to create an image from the image collection
+        
+var IMG_AngleDub = IMG_Angle.double() //Had to change the data storage type of this band from float to double to match the detail of the other two bands. (Double can store much more data than a float)
+var IMG_all = IMG_VH.addBands(IMG_VV).addBands(IMG_AngleDub) //Stacked the three images to creat one image with three bands
+print(IMG_all)
+
+//Use uniform kernel created in lines 7-8 to compute the mean in each 5x5 neighborhood for the global imagery
+var mean1 =IMG_all.reduceNeighborhood({
+   reducer: ee.Reducer.mean(),
+   kernel: uniformKernel
+});
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Banke2020bound = ee.Image(Banke2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]);//Here I re-mapped the 2021 image to isolate rice, as the 2021 images have multiple land-cover values
+//I re-used this code from the 2020 code I wrote, and just didn t change the varible names. When exporting in line 86, I made sure to have the description say 2021 (Sorry, i know it's confusing)
+
+// // Create geometry 
+var Banke2020geo = Banke2020bound.reduceToVectors({//--------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+// Create geometry (This is from some aggregation I was working on)
+var Banke2020geo30 = Banke2020bound.reduceToVectors({//--------------------------
+  scale: 30,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Banke2020smooth = mean1.clip(Banke2020geo);//Clip global smoothed data to individual district
+
+Export.image.toDrive({
+  image: Banke2020smooth,
+  description: 'Banke2021_SARgeo30', //Here I reminded myself that this image uses the 2021 boundaries, not 2020
+  scale: 10, //Pixel size in meters
+  maxPixels: 3784216672400, //Just use a huge number
+  region:Banke2020bound, //Use this rather than the geometry, as the geometry is far to detailed and would max out thge memory we can allocate
+});
+Map.addLayer(Banke2020smooth,{},'Banke2020smooth')
+
+// Perform sampling; convert image pixels to features.
+var Banke2020smoothSample30 = Banke2020smooth.sample({
+  region: Banke2020geo30,
+  numPixels: 100000000,
+  // Default (false) is no geometries in the output.
+  // When set to true, each feature has a Point geometry at the center of the
+  // image pixel.
+  //geometries: true,
+
+  // The scale is not specified, so the resolution of the image will be used,
+  // and there is a feature for every pixel. If we give a scale parameter, the
+  // image will be resampled and there will be more or fewer features.
+  //
+  scale: 10,
+});
+
+// //print(Banke2020smoothSample,'Banke2020smoothSample')
+// //Map.addLayer(Banke2020smoothSample,{},'Banke2020smoothSample')
+
+// Export the FeatureCollection.
+Export.table.toDrive({
+  collection: Banke2020smoothSample30,
+  description: 'exportTableExample10',
+  fileFormat: 'CSV'
+});
+
+// // Perform sampling; convert image pixels to features.
+// var Banke2020smoothSample = Banke2020smooth.sample({
+//   region: Banke2020geo,
+//   numPixels: 10000,
+//   // Default (false) is no geometries in the output.
+//   // When set to true, each feature has a Point geometry at the center of the
+//   // image pixel.
+//   //geometries: true,
+
+//   // The scale is not specified, so the resolution of the image will be used,
+//   // and there is a feature for every pixel. If we give a scale parameter, the
+//   // image will be resampled and there will be more or fewer features.
+//   //
+//   scale: 10,
+// });
+// // Export the FeatureCollection.
+// Export.table.toDrive({
+//   collection: Banke2020smoothAllData,
+//   description: 'Banke2020smoothAllPix',
+//   fileFormat: 'CSV'
+// });
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Bara2020bound = ee.Image(Bara2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Bara2020geo = Bara2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Bara2020smooth = mean1.clip(Bara2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Bara2020smooth,//-----------------------------------------------------
+  description: 'Bara2021_SAR',//------------------------------------------ Here I reminded myself that this image uses the 2021 boundaries, not 2020
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Bara2020bound,//------------------------------------------------------
+});
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Bardiya2020bound = ee.Image(Bardiya2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Bardiya2020geo = Bardiya2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Bardiya2020smooth = mean1.clip(Bardiya2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Bardiya2020smooth,//-----------------------------------------------------
+  description: 'Bardiya2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Bardiya2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Chitwan2020bound = ee.Image(Chitwan2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Chitwan2020geo = Chitwan2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Chitwan2020smooth = mean1.clip(Chitwan2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Chitwan2020smooth,//-----------------------------------------------------
+  description: 'Chitwan2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Chitwan2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Dang2020bound = ee.Image(Dang2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Dang2020geo = Dang2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Dang2020smooth = mean1.clip(Dang2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Dang2020smooth,//-----------------------------------------------------
+  description: 'Dang2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Dang2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Dhanusa2020bound = ee.Image(Dhanusa2020).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Dhanusa2020geo = Dhanusa2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Dhanusa2020smooth = mean1.clip(Dhanusa2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Dhanusa2020smooth,//-----------------------------------------------------
+  description: 'Dhanusa2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Dhanusa2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Jhapa2020bound = ee.Image(Jhapa2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Jhapa2020geo = Jhapa2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Jhapa2020smooth = mean1.clip(Jhapa2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Jhapa2020smooth,//-----------------------------------------------------
+  description: 'Jhapa2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Jhapa2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Kailai2020bound = ee.Image(Kailai2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Kailai2020geo = Kailai2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Kailai2020smooth = mean1.clip(Kailai2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Kailai2020smooth,//-----------------------------------------------------
+  description: 'Kailai2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Kailai2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Kanchanpur2020bound = ee.Image(Kanchanpur2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Kanchanpur2020geo = Kanchanpur2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Kanchanpur2020smooth = mean1.clip(Kanchanpur2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Kanchanpur2020smooth,//-----------------------------------------------------
+  description: 'Kanchanpur2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Kanchanpur2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Kapilvastu2020bound = ee.Image(Kapilvastu2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Kapilvastu2020geo = Kapilvastu2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Kapilvastu2020smooth = mean1.clip(Kapilvastu2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Kapilvastu2020smooth,//-----------------------------------------------------
+  description: 'Kapilvastu2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Kapilvastu2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Mahottari2020bound = ee.Image(Mahottari2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Mahottari2020geo = Mahottari2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Mahottari2020smooth = mean1.clip(Mahottari2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Mahottari2020smooth,//-----------------------------------------------------
+  description: 'Mahottari2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Mahottari2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Morang2020bound = ee.Image(Morang2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Morang2020geo = Morang2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Morang2020smooth = mean1.clip(Morang2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Morang2020smooth,//-----------------------------------------------------
+  description: 'Morang2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Morang2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Nawalpur2020bound = ee.Image(Nawalpur2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Nawalpur2020geo = Nawalpur2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Nawalpur2020smooth = mean1.clip(Nawalpur2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Nawalpur2020smooth,//-----------------------------------------------------
+  description: 'Nawalpur2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Nawalpur2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Parasi2020bound = ee.Image(Parasi2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Parasi2020geo = Parasi2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Parasi2020smooth = mean1.clip(Parasi2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Parasi2020smooth,//-----------------------------------------------------
+  description: 'Parasi2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Parasi2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Parsa2020bound = ee.Image(Parsa2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Parsa2020geo = Parsa2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Parsa2020smooth = mean1.clip(Parsa2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Parsa2020smooth,//-----------------------------------------------------
+  description: 'Parsa2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Parsa2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Rautahat2020bound = ee.Image(Rautahat2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Rautahat2020geo = Rautahat2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Rautahat2020smooth = mean1.clip(Rautahat2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Rautahat2020smooth,//-----------------------------------------------------
+  description: 'Rautahat2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Rautahat2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Rupendhi2020bound = ee.Image(Rupendhi2020).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Rupendhi2020geo = Rupendhi2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Rupendhi2020smooth = mean1.clip(Rupendhi2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Rupendhi2020smooth,//-----------------------------------------------------
+  description: 'Rupendhi2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Rupendhi2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Saptari2020bound = ee.Image(Saptari2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Saptari2020geo = Saptari2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Saptari2020smooth = mean1.clip(Saptari2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Saptari2020smooth,//-----------------------------------------------------
+  description: 'Saptari2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Saptari2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Sarlahii2020bound = ee.Image(Sarlahii2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Sarlahii2020geo = Sarlahii2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Sarlahii2020smooth = mean1.clip(Sarlahii2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Sarlahii2020smooth,//-----------------------------------------------------
+  description: 'Sarlahii2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Sarlahii2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Siraha2020bound = ee.Image(Siraha2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Siraha2020geo = Siraha2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Siraha2020smooth = mean1.clip(Siraha2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Siraha2020smooth,//-----------------------------------------------------
+  description: 'Siraha2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Siraha2020bound,//------------------------------------------------------
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////
+var Sunsari2020bound = ee.Image(Sunsari2021).remap([1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]); 
+
+// // Create geometry 
+var Sunsari2020geo = Sunsari2020bound.reduceToVectors({//----------------------------
+  scale: 10,
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'vectors',
+  maxPixels: 1e20
+});
+
+var Sunsari2020smooth = mean1.clip(Sunsari2020geo);//--------------------------------
+
+Export.image.toDrive({
+  image: Sunsari2020smooth,//-----------------------------------------------------
+  description: 'Sunsari2021_SAR',//------------------------------------------
+  scale: 10,
+  maxPixels: 3784216672400,
+  region:Sunsari2020bound,//------------------------------------------------------
+});
