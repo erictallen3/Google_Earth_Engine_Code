@@ -1,8 +1,10 @@
 ## File descriptions
 
-# Pinal_County_Cotton_Lndst-9: Landsat-9 band reflectance and vegetation indices for cotton fields in Pinal County, Arizona
+# Pinal_County_Cotton_Lndst-9
+### Landsat-9 band reflectance and vegetation indices for cotton fields in Pinal County, Arizona
 
-# Pinal_County_Cotton_Sentinel-2: Sentinel-2 band reflectance and vegetation indices for cotton fields in Pinal County, Arizona
+# Pinal_County_Cotton_Sentinel-2
+### Sentinel-2 band reflectance and vegetation indices for cotton fields in Pinal County, Arizona
 
 # SAR_index_Arkansas_Rice: SAR backscatter data and DpRVIc calculations for rice fields in Arkansas
 
