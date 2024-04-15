@@ -1,0 +1,257 @@
+Map.setCenter(-92.47448, 35.16522,15)
+
+var sample_pts = ee.FeatureCollection([
+ee.Feature(ee.Geometry.Point(-92.47448, 35.16522), {label: 'F1'}),
+ee.Feature(ee.Geometry.Point(-92.47062, 35.16438	), {label: 'F2'}),
+ee.Feature(ee.Geometry.Point(-91.8647,34.8451	), {label: 'F3'}),
+ee.Feature(ee.Geometry.Point(-91.865,34.8401	), {label: 'F4'}),
+ee.Feature(ee.Geometry.Point(-91.8187,34.8277	), {label: 'F5'}),
+ee.Feature(ee.Geometry.Point(-91.8018,34.824	), {label: 'F6'}),
+ee.Feature(ee.Geometry.Point(-91.7771,34.7944	), {label: 'F7'}),
+ee.Feature(ee.Geometry.Point(-91.761,34.7936	), {label: 'F8'}),
+ee.Feature(ee.Geometry.Point(-91.6981,34.7704	), {label: 'F9'}),
+ee.Feature(ee.Geometry.Point(-91.6906,	34.7702), {label: 'F10'}),
+ee.Feature(ee.Geometry.Point(-91.9168,34.7168), {label: 'F11'}),
+ee.Feature(ee.Geometry.Point(-91.9254,34.7087	), {label: 'F12'}),
+ee.Feature(ee.Geometry.Point(-91.9237,34.7087	), {label: 'F13'}),
+ee.Feature(ee.Geometry.Point(-91.76353,34.59861), {label: 'F14'}),
+ee.Feature(ee.Geometry.Point(-91.76267,34.59854), {label: 'F15'}),
+ee.Feature(ee.Geometry.Point(-91.7147,34.59253), {label: 'F16'}),
+ee.Feature(ee.Geometry.Point(-91.7147,34.59211	), {label: 'F17'}),
+ee.Feature(ee.Geometry.Point(-91.75177,34.58879), {label: 'F18'}),
+ee.Feature(ee.Geometry.Point(-91.75186,34.58554), {label: 'F19'}),
+ee.Feature(ee.Geometry.Point(-91.75177,34.58497), {label: 'F20'}),
+ee.Feature(ee.Geometry.Point(-91.75177,	34.58193), {label: 'F21'}),
+ee.Feature(ee.Geometry.Point(-91.76692,34.49504	), {label: 'F22'}),
+ee.Feature(ee.Geometry.Point(-91.76692,34.49384), {label: 'F23'})
+]);
+
+
+
+
+///////Point data
+var jet_cmap = [' #000080 ', ' #0000bd ', ' #0000fa ', ' #0022ff ', ' #0057ff ', ' #008dff ',
+' #00c3ff ', ' #0ff8e8 ', ' #3affbc ', ' #66ff91 ', ' #91ff66 ', ' #bcff3a ', ' #e8ff0f ', ' #ffd500 ',
+' #ffa400 ', ' #ff7200 ', ' #ff4000 ', ' #fa0e00 ', ' #bd0000 ', ' #800000 ',]
+var visualization = {
+  min: 0.0,
+  max: 1.0,
+  bands: ['B2', 'B3', 'B4'],
+};
+var ndviParams = {min: -0.3, max: 0.9, palette: ['blue', 'black', 'green']};
+
+ function bufferPoints(radius, bounds) {
+  return function(pt) {
+    pt = ee.Feature(pt);
+    return bounds ? pt.buffer(radius).bounds() : pt.buffer(radius);
+  };
+}
+var ptsBuff = sample_pts.map(bufferPoints(5, false));
+print(ptsBuff,'ptsBuff')
+
+
+
+//Get everything but DpRVIc
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+function maskS2clouds(image) {
+  var qa = image.select('QA60');
+  // Bits 10 and 11 are clouds and cirrus, respectively.
+  var cloudBitMask = 1 << 10;
+  var cirrusBitMask = 1 << 11;
+  // Both flags should be set to zero, indicating clear conditions.
+  var mask = qa.bitwiseAnd(cloudBitMask).eq(0)
+      .and(qa.bitwiseAnd(cirrusBitMask).eq(0));
+  return image.updateMask(mask).divide(10000);
+}
+///////////////////////////////////
+// Define a square, uniform kernel
+//The radius of two (diagonally from the center) allows for a 5x5 pixel area
+var uniformKernel=ee.Kernel.square({
+   radius: 2});
+print(uniformKernel,"uniformKernel") //Visualize matrix in console and look at respective pixel weights
+
+var globalSAR_2020vh = ee.ImageCollection('COPERNICUS/S1_GRD').filterBounds(StudyArea)
+        .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
+        .filterDate('2020-07-21', '2020-07-30')
+        .filter(ee.Filter.eq('instrumentMode', 'IW'))
+        .select('VH')
+        .map(function(image) {
+          var edge = image.lt(-30.0);
+          var maskedImage = image.mask().and(edge.not());
+          return image.updateMask(maskedImage);
+        });
+var globalSAR_2020vv = ee.ImageCollection('COPERNICUS/S1_GRD').filterBounds(StudyArea)
+        .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+        .filterDate('2020-07-21', '2020-07-30')
+        .filter(ee.Filter.eq('instrumentMode', 'IW'))
+        .select('VV')
+        .map(function(image) {
+          var edge = image.lt(-30.0);
+          var maskedImage = image.mask().and(edge.not());
+          return image.updateMask(maskedImage);
+        });
+var globalSAR_2020angle = ee.ImageCollection('COPERNICUS/S1_GRD').filterBounds(StudyArea)
+        //.filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'angle'))
+        .filterDate('2020-07-21', '2020-07-30')
+        .filter(ee.Filter.eq('instrumentMode', 'IW'))
+        .select('angle')        
+        .map(function(image) {
+          var edge = image.lt(-30.0);
+          var maskedImage = image.mask().and(edge.not());
+          return image.updateMask(maskedImage);
+        });
+var dataset = ee.ImageCollection('COPERNICUS/S2_HARMONIZED').filterBounds(StudyArea)
+          .filterDate('2020-07-21', '2020-07-30')
+          // Pre-filter to get less cloudy granules.
+          .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',60))
+          .map(maskS2clouds);
+var globalSentMean = dataset.mean(); //Calculate mean pixel values of the images in the set range from line 32
+////Calc GNDVI
+var nirBand = 'B8';
+var greenBand = 'B3';
+var globalGNDVI = globalSentMean.normalizedDifference([nirBand, greenBand]);
+//Map.addLayer(dataset,visualization,'S2')
+//Map.addLayer(dataset.mean(), visualization, 'RGB');
+
+var VH = globalSAR_2020vh //Not necessary, but wanted variables with shorter names
+var VV = globalSAR_2020vv //Not necessary, but wanted variables with shorter names
+var ANGLE = globalSAR_2020angle //Not necessary, but wanted variables with shorter names
+
+var IMG_VH = ee.Image.cat(VH.mean()); //filter the above image collection using the date defined in line 1, then calculate mean to create an image from the image collection
+var IMG_VV = ee.Image.cat(VV.mean()); //filter the above image collection using the date defined in line 1, then calculate mean to create an image from the image collection
+var IMG_Angle = ee.Image.cat(ANGLE.mean()); //filter the above image collection using the date defined in line 1, then calculate mean to create an image from the image collection
+
+var IMG_AngleDub = IMG_Angle.double() //Had to change the data storage type of this band from float to double to match the detail of the other two bands. (Double can store much more data than a float)
+var IMG_all = IMG_VH.addBands(IMG_VV).addBands(IMG_AngleDub) //Stacked the three images to creat one image with three bands
+//print(IMG_all,'IMG_all')
+//Map.addLayer(IMG_all,{},'IMG_all')
+
+////Use uniform kernel created in lines 7-8 to compute the mean in each 5x5 neighborhood for the global imagery
+var mean1 =IMG_all.reduceNeighborhood({
+   reducer: ee.Reducer.mean(),
+   kernel: uniformKernel
+});
+print(mean1,'mean1')
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//--------------------------------------------------------------
+
+
+// // Load Sentinel-1 C-band SAR Ground Range collection 
+// var collection = ee.ImageCollection('COPERNICUS/S1_GRD').filterBounds(StudyArea)
+//     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))  
+//     .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
+//   // Filter to get images collected in interferometric wide swath mode.
+//     .filter(ee.Filter.eq('instrumentMode', 'IW'))
+//             .select('angle')        
+//         .map(function(image) {
+//           var edge = image.lt(-30.0);
+//           var maskedImage = image.mask().and(edge.not());
+//           return image.updateMask(maskedImage);
+//         });
+    
+// var meanCollection = IMG_all.mean()
+
+
+
+//Select VV and VH bands and store in variables
+var vv= mean1.select('VV_mean');
+var vh= mean1.select('VH_mean');
+
+
+// //Filter by date e.g. this following command selects 2016-07-19 image
+// var vv0=vv.filterDate('2018-10-19', '2018-10-28').mosaic();
+// var vh0=vh.filterDate('2018-10-19', '2018-10-28').mosaic();
+
+
+//dB to Linear Scale Conversion
+// Functions to convert from/to dB
+function toNatural(img) {
+  return ee.Image(10.0).pow(img.select(0).divide(10.0));fcvvc
+}
+///Apply function on dB image
+var vv0s = toNatural(vv).rename('VV');
+var vh0s = toNatural(vh).rename('VH');
+
+// //Speckle filtering/smoothing
+// // Smooth the image by convolving with the boxcar kernel.
+// // Define a boxcar or low-pass kernel.
+// //A 3X3 Boxcar filter
+// var boxcar = ee.Kernel.square({radius: 1.5, units: 'pixels', normalize: true});
+// var vh0s1 = vh0s.convolve(boxcar);
+// var vv0s1 = vv0s.convolve(boxcar);
+
+var ptsBuff2 = ptsBuff.map(function(feature) {
+  return ee.Feature(feature.geometry(), {'id': feature.id()})
+});
+print(ptsBuff2,'ptsBuff2')
+
+var vh0s1 = vh0s.convolve(uniformKernel);
+var vv0s1 = vv0s.convolve(uniformKernel);
+
+var span = vv0s1.add(vh0s1);
+var ratio = vh0s1.divide(vv0s1);
+print(span,'span')
+print(ratio,'ratio')
+
+var q = ratio;
+var DpRVIc_n = q.multiply(q.add(ee.Number(3)));
+var DpRVIc_d = (q.add(ee.Number(1))).multiply(q.add(ee.Number(1)));
+var DpRVIc = DpRVIc_n.divide(DpRVIc_d);
+Map.addLayer(DpRVIc,{},'DpRVIc')
+print(DpRVIc,'DpRVIc')
+
+
+///////////////////////////////////_DpRVIc
+
+var DpRVIc_Mean = DpRVIc.reduceRegions({ 
+  reducer: ee.Reducer.mean(),
+  collection: ptsBuff2,
+  //geometry: ptsBuff2, //.select('P154'),
+  scale: 10,
+});
+Map.addLayer(DpRVIc_Mean,jet_cmap,'DpRVIc_Mean')
+print(DpRVIc_Mean,jet_cmap, 'DpRVIc_Mean')
+
+
+///////////////////////////////////_Everything else
+var S2 = dataset
+                .map(function(img) {return img.clip(ptsBuff2)});
+////Turn image collection to image
+var S2gndvi = globalGNDVI.clip(ptsBuff2)
+Map.addLayer(S2gndvi,ndviParams,"S2gndvi")
+var S1_S2clipGNDVI = S2.mean().addBands(mean1).addBands(S2gndvi)
+print(S1_S2clipGNDVI,"S1_S2clipGNDVI")
+
+
+////Turn image collection to image
+//var S1_S2clipGNDVI = S2clip
+//Map.addLayer(S2clipGNDVI,ndviParams,"S2clipGNDVI")
+
+var S1_S2meanPlots = S1_S2clipGNDVI.reduceRegions({ 
+  reducer: ee.Reducer.mean(),
+  collection: ptsBuff2,
+  //geometry: ptsBuff2, //.select('P154'),
+  scale: 10,
+});
+print(S1_S2meanPlots, 'S1_S2meanPlots')
+
+
+
+Export.table.toDrive({
+  collection: DpRVIc_Mean,
+  folder: 'new',
+  description:'DpRVIc_Mean',
+  fileFormat: 'CSV'
+});
+Export.table.toDrive({
+  collection: S1_S2meanPlots,
+  folder: 'new',
+  description:'S1_S2meanPlots',
+  fileFormat: 'CSV'
+});
+// Export.image.toDrive({
+//   image: DpRVIc,
+//   description: 'DpRVIc',
+//   scale: 10,
+//   region:ptsBuff,
+// });
