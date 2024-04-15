@@ -1,0 +1,716 @@
+// Add EVI using an expression.
+var addEVI=function(image){
+var EVI = image.expression(
+      '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))', {
+      'NIR' : image.select('B8').divide(10000),
+      'RED' : image.select('B4').divide(10000),
+      'BLUE': image.select('B2').divide(10000)}).rename('EVI');
+      return image.addBands(EVI);
+};
+                
+
+
+
+//--------------------------------------------------------------
+/**
+ * Function to mask clouds using the Sentinel-2 QA band
+ * @param {ee.Image} image Sentinel-2 image
+ * @return {ee.Image} cloud masked Sentinel-2 image
+ */
+function maskS2clouds(image) {
+  var qa = image.select('QA60');
+
+  // Bits 10 and 11 are clouds and cirrus, respectively.
+  var cloudBitMask = 1 << 10;
+  var cirrusBitMask = 1 << 11;
+
+  // Both flags should be set to zero, indicating clear conditions.
+  var mask = qa.bitwiseAnd(cloudBitMask).eq(0)
+      .and(qa.bitwiseAnd(cirrusBitMask).eq(0));
+
+  return image.updateMask(mask).divide(10000);
+}
+
+///////////////////////////////new
+var addEVI=function(image){
+var EVI = image.expression(
+      '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))', {
+      'NIR' : image.select('B8'),
+      'RED' : image.select('B4'),
+      'BLUE': image.select('B2')}).rename('EVI');
+      return image.addBands(EVI);
+};
+///////////////////////////////new
+
+var dataset = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+                  .filterDate('2023-09-25', '2023-09-27')
+                  // Pre-filter to get less cloudy granules.
+                  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',20))
+                  .map(maskS2clouds)
+                  .map(addEVI);//new
+
+
+var visualization = {
+  min: 0.0,
+  max: 0.3,
+  bands: ['B4', 'B3', 'B2'],
+};
+var NDVIvisualization = {
+  min: 0,
+  max: 1,
+  bands: ["nd"],
+};
+
+// Create palettes for display of NDVI
+var ndvi_pal = ['#d73027', '#f46d43', '#fdae61', '#fee08b', '#d9ef8b',
+'#a6d96a'];
+
+Map.setCenter(-111.975603, 33.079164);
+
+Map.addLayer(dataset.mean(), visualization, 'RGB');
+
+//Set NDVI bands
+var nirBand = 'B8';
+var redBand = 'B4';
+
+
+////Dean Wells/////////////////////////////////////////////////
+var WellsField1 = ee.Geometry.Polygon(
+     [[[-111.74873092091265, 32.86848450938008],
+      [-111.74876163639108, 32.86504857700491],
+      [-111.74687035260095, 32.86506916715052],
+      [-111.74688106499067, 32.86849155920795]]]);
+Map.addLayer(WellsField1,visualization, "WellsField1")
+// Apply the buffer method to the Polygon object.
+var WellsField1buffer = WellsField1.buffer({'distance': -20});
+Map.addLayer(WellsField1buffer,'', 'WellsField1buffer')
+//Clip to buffer
+var WellsField1bufferClip = dataset
+                .filterBounds(WellsField1buffer)
+                .map(function(img) {return img.clip(WellsField1buffer)});
+Map.addLayer(WellsField1bufferClip,visualization,'WellsField1bufferClip')
+////Turn image collection to image
+var WellsField1bufferIMG = WellsField1bufferClip.mean();//Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+
+////----------------------------------------------//Prints one mean value for each image 
+//Prints one median value for each season 
+var WellsField1bufferIMGMean = WellsField1bufferIMG.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: WellsField1,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(WellsField1bufferIMGMean, 'WellsField1bufferIMGMean')
+
+////Calc NDVI
+var WellsField1bufferNDVI = WellsField1bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(WellsField1bufferNDVI, {min:0, max:1, palette: ndvi_pal},'WellsField1bufferNDVI')
+
+var WellsField1bufferNDVIMean = WellsField1bufferNDVI.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: WellsField1,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(WellsField1bufferNDVIMean, 'WellsField1bufferNDVIMean')
+
+
+var WellsField2 = ee.Geometry.Polygon(
+     [[[-111.73598387173794, 32.85032894403867],
+      [-111.73597493987018, 32.84696928636556],
+      [-111.73173254750289, 32.84697803278463],
+      [-111.73172699298875, 32.85028287949875]]]);
+Map.addLayer(WellsField2,visualization, "WellsField2")
+//// Apply the buffer method to the Polygon object.
+var WellsField2buffer = WellsField2.buffer({'distance': -20});
+//Map.addLayer(WellsField2buffer,'', 'WellsField2buffer')
+////Clip to buffer
+var WellsField2bufferClip = dataset
+                .filterBounds(WellsField2buffer)
+                .map(function(img) {return img.clip(WellsField2buffer)});
+//Map.addLayer(WellsField2bufferClip,visualization,'WellsField2bufferClip')
+////Turn image collection to image
+var WellsField2bufferIMG = WellsField2bufferClip.mean();//Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+
+//Prints one median value for each season 
+var WellsField2bufferIMGMean = WellsField2bufferIMG.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: WellsField2,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(WellsField2bufferIMGMean, 'WellsField2bufferIMGMean')
+////Calc NDVI
+var WellsField2bufferNDVI = WellsField2bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(WellsField2bufferNDVI, {min:0, max:1, palette: ndvi_pal},'WellsField2bufferNDVI')
+////Calc NDVI
+var WellsField2bufferNDVI = WellsField2bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(WellsField1bufferNDVI, {min:0, max:1, palette: ndvi_pal},'WellsField2bufferNDVI')
+
+var WellsField2bufferNDVIMean = WellsField2bufferNDVI.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: WellsField2,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(WellsField2bufferNDVIMean, 'WellsField2bufferNDVIMean')
+
+
+var WellsField3 = ee.Geometry.Polygon(
+     [[[-111.73160131481986, 32.85023960239952],
+      [-111.73158274242178, 32.84800061395211],
+      [-111.72843472094665, 32.84802401830469],
+      [-111.7284205809377, 32.85022852113933]]]);
+Map.addLayer(WellsField3,visualization, "WellsField3")
+//// Apply the buffer method to the Polygon object.
+var WellsField3buffer = WellsField3.buffer({'distance': -20});
+//Map.addLayer(WellsField3buffer,'', 'WellsField3buffer')
+////Clip to buffer
+var WellsField3bufferClip = dataset
+                .filterBounds(WellsField3buffer)
+                .map(function(img) {return img.clip(WellsField3buffer)});
+//Map.addLayer(WellsField3bufferClip,visualization,'WellsField3bufferClip')
+////Turn image collection to image
+var WellsField3bufferIMG = WellsField3bufferClip.mean();//Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+
+//Prints one median value for each season 
+var WellsField3bufferIMGMean = WellsField3bufferIMG.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: WellsField3,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(WellsField3bufferIMGMean, 'WellsField3bufferIMGMean')
+////Calc NDVI
+var WellsField3bufferNDVI = WellsField3bufferIMG.normalizedDifference([nirBand, redBand]);
+
+var WellsField3bufferNDVIMean = WellsField3bufferNDVI.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: WellsField3,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(WellsField3bufferNDVIMean, 'WellsField3bufferNDVIMean')
+
+
+var WellsField4 = ee.Geometry.Polygon(
+     [[[-111.73158351238334, 32.847889107869825],
+      [-111.73154280864198, 32.84565994066811],
+      [-111.7274378215014, 32.845693760764085],
+      [-111.72744717021479, 32.84789855676935]]]);
+Map.addLayer(WellsField4,visualization, "WellsField4")
+//// Apply the buffer method to the Polygon object.
+var WellsField4buffer = WellsField4.buffer({'distance': -20});
+//Map.addLayer(WellsField4buffer,'', 'WellsField4buffer')
+////Clip to buffer
+var WellsField4bufferClip = dataset
+                .filterBounds(WellsField4buffer)
+                .map(function(img) {return img.clip(WellsField4buffer)});
+//Map.addLayer(WellsField4bufferClip,visualization,'WellsField4bufferClip')
+////Turn image collection to image
+var WellsField4bufferIMG = WellsField4bufferClip.mean();//Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+
+//Prints one median value for each season 
+var WellsField4bufferIMGMean = WellsField4bufferIMG.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: WellsField4,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(WellsField4bufferIMGMean, 'WellsField4bufferIMGMean')
+////Calc NDVI
+var WellsField4bufferNDVI = WellsField4bufferIMG.normalizedDifference([nirBand, redBand]);
+
+var WellsField4bufferNDVIMean = WellsField4bufferNDVI.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: WellsField4,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(WellsField4bufferNDVIMean, 'WellsField4bufferNDVIMean')
+
+
+var WellsField5 = ee.Geometry.Polygon(
+     [[[-111.73597067688361, 32.84684135710469],
+      [-111.73595669316141, 32.843175210725896],
+      [-111.73165929221061, 32.84321306004928],
+      [-111.73176026490039, 32.84684728691279]]]);
+//Map.addLayer(WellsField5,visualization, "WellsField5")
+//// Apply the buffer method to the Polygon object.
+var WellsField5buffer = WellsField5.buffer({'distance': -20});
+//Map.addLayer(WellsField5buffer,'', 'WellsField5buffer')
+////Clip to buffer
+var WellsField5bufferClip = dataset
+                .filterBounds(WellsField5buffer)
+                .map(function(img) {return img.clip(WellsField5buffer)});
+//Map.addLayer(WellsField5bufferClip,visualization,'WellsField5bufferClip')
+////Turn image collection to image
+var WellsField5bufferIMG = WellsField5bufferClip.mean();//Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+
+//Prints one median value for each season 
+var WellsField5bufferIMGMean = WellsField5bufferIMG.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: WellsField5,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(WellsField5bufferIMGMean, 'WellsField5bufferIMGMean')
+////Calc NDVI
+var WellsField5bufferNDVI = WellsField5bufferIMG.normalizedDifference([nirBand, redBand]);
+
+var WellsField5bufferNDVIMean = WellsField5bufferNDVI.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: WellsField5,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(WellsField5bufferNDVIMean, 'WellsField5bufferNDVIMean')
+
+////Paco Ollerton/////////////////////////////////////////////////
+var OllertonField1= ee.Geometry.Polygon(
+     [[[-111.96275358253135, 32.8199047663092],//top left
+     [-111.96187918242802, 32.8184846906246],//middle left
+     [-111.96046834049794, 32.81770476636147],//bottom left
+      [-111.95687418045677, 32.817709274619595],//bottom right
+      [-111.95822064936124, 32.819918290744425],//top right
+      ]]);
+//Map.addLayer(OllertonField1,visualization, "OllertonField1")
+//// Apply the buffer method to the Polygon object.
+var OllertonField1buffer = OllertonField1.buffer({'distance': -20});
+//Map.addLayer(OllertonField1buffer,'', 'OllertonField1buffer')
+//Clip to buffer
+var OllertonField1bufferClip = dataset
+                .filterBounds(OllertonField1buffer)
+                .map(function(img) {return img.clip(OllertonField1buffer)});
+//Map.addLayer(OllertonField1bufferClip,visualization,'OllertonField1bufferClip')
+////Turn image collection to image
+var OllertonField1bufferIMG = OllertonField1bufferClip.mean();//Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+print(OllertonField1bufferIMG, 'OllertonField1bufferIMGmean')
+
+//Prints one median value for each season 
+var OllertonField1bufferIMGMean = OllertonField1bufferIMG.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: OllertonField1,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(OllertonField1bufferIMGMean, 'OllertonField1bufferIMGMean')
+////Calc NDVI
+var OllertonField1bufferNDVI = OllertonField1bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(OllertonField1bufferNDVI, {min:0, max:1, palette: ndvi_pal},'OllertonField1bufferNDVI')
+////Calc NDVI
+var OllertonField1bufferNDVI = OllertonField1bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(OllertonField1bufferNDVI, {min:0, max:1, palette: ndvi_pal},'OllertonField1bufferNDVI')
+
+var OllertonField1bufferNDVIMean = OllertonField1bufferNDVI.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: OllertonField1,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(OllertonField1bufferNDVIMean, 'OllertonField1bufferNDVIMean')
+
+
+var OllertonField2= ee.Geometry.Polygon(
+     [[[ -111.95807157784424, 32.8199163929892],//top left
+      [-111.95670943506846, 32.817687119308744],//bottom left
+      [-111.95239927944239, 32.81768847654153],//bottom right
+      [-111.9537689405512, 32.81992157529874]//top right
+      ]]);
+//Map.addLayer(OllertonField2,visualization, "OllertonField2")
+//// Apply the buffer method to the Polygon object.
+var OllertonField2buffer = OllertonField2.buffer({'distance': -20});
+//Map.addLayer(OllertonField2buffer,'','OllertonField2buffer')
+////Clip to buffer
+var OllertonField2bufferClip = dataset
+                .filterBounds(OllertonField2buffer)
+                .map(function(img) {return img.clip(OllertonField2buffer)});
+//Map.addLayer(OllertonField2bufferClip,visualization,'OllertonField2bufferClip')
+////Turn image collection to image
+var OllertonField2bufferIMG = OllertonField2bufferClip.mean();//Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+print(OllertonField2bufferIMG, 'OllertonField2bufferIMGmean')
+
+//Prints one median value for each season 
+var OllertonField2bufferIMGMean = OllertonField2bufferIMG.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: OllertonField2,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(OllertonField2bufferIMGMean, 'OllertonField2bufferIMGMean')
+////Calc NDVI
+var OllertonField2bufferNDVI = OllertonField2bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(OllertonField2bufferNDVI, {min:0, max:1, palette: ndvi_pal},'OllertonField2bufferNDVI')
+////Calc NDVI
+var OllertonField2bufferNDVI = OllertonField2bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(OllertonField1bufferNDVI, {min:0, max:1, palette: ndvi_pal},'OllertonField2bufferNDVI')
+
+var OllertonField2bufferNDVIMean = OllertonField2bufferNDVI.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: OllertonField2,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(OllertonField2bufferNDVIMean, 'OllertonField2bufferNDVIMean')
+
+// ////Noah Hiscox/////////////////////////////////////////////////
+// var HiscoxField1= ee.Geometry.Polygon(
+//     [[[-111.5026157042679, 32.95159162076007],//top left
+//       [-111.5025568385487, 32.94827243821524],//bottom left
+//       [-111.50051485522306, 32.94828554379526],//bottom right
+//       [-111.50053839176971, 32.95160582520178]//top right
+//       ]]);
+// //Map.addLayer(HiscoxField1,visualization, 'HiscoxField1')
+// //// Apply the buffer method to the Polygon object.
+// var HiscoxField1buffer = HiscoxField1.buffer({'distance': -20});
+// //Map.addLayer(HiscoxField1buffer,'','HiscoxField1buffer')
+// ////Clip to buffer
+// var HiscoxField1bufferClip = dataset
+//                 .filterBounds(HiscoxField1buffer)
+//                 .map(function(img) {return img.clip(HiscoxField1buffer)});
+// //Map.addLayer(HiscoxField1bufferClip,visualization,'HiscoxField1bufferClip')
+// ////Turn image collection to image
+// var HiscoxField1bufferIMG = HiscoxField1bufferClip.median();
+// ////Calc NDVI
+// var HiscoxField1bufferNDVI = HiscoxField1bufferIMG.normalizedDifference([nirBand, redBand]);
+// Map.addLayer(HiscoxField1bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HiscoxField1bufferNDVI')
+// ////Export the image
+// Export.image.toDrive({
+//   image: HiscoxField1bufferNDVI,
+//   description: 'HiscoxField1NDVI',
+//   scale: 10,
+//   region:HiscoxField1buffer,
+// });
+
+
+// var HiscoxField2= ee.Geometry.Polygon(
+//     [[[-111.48951236021814, 32.971864830233066],//top left
+//       [-111.48950810227566, 32.966573498235896],//bottom left
+//       [-111.48698470313012, 32.96658435470995],//bottom right
+//       [-111.48700184553857, 32.97189345755008]//top right
+//       ]]);
+// //Map.addLayer(HiscoxField2,visualization, 'HiscoxField2')
+// //// Apply the buffer method to the Polygon object.
+// var HiscoxField2buffer = HiscoxField2.buffer({'distance': -20});
+// //Map.addLayer(HiscoxField2buffer,'','HiscoxField2buffer')
+// ////Clip to buffer
+// var HiscoxField2bufferClip = dataset
+//                 .filterBounds(HiscoxField2buffer)
+//                 .map(function(img) {return img.clip(HiscoxField2buffer)});
+// //Map.addLayer(HiscoxField2bufferClip,visualization,'HiscoxField2bufferClip')
+// ////Turn image collection to image
+// var HiscoxField2bufferIMG = HiscoxField2bufferClip.median();
+// ////Calc NDVI
+// var HiscoxField2bufferNDVI = HiscoxField2bufferIMG.normalizedDifference([nirBand, redBand]);
+// Map.addLayer(HiscoxField2bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HiscoxField2bufferNDVI')
+// ////Export the image
+// Export.image.toDrive({
+//   image: HiscoxField2bufferNDVI,
+//   description: 'HiscoxField2NDVI',
+//   scale: 10,
+//   region:HiscoxField2buffer,
+// });
+
+
+// var HiscoxField3= ee.Geometry.Polygon(
+//     [[[-111.47958681933106, 32.973740444345694],//top left
+//       [-111.47951402251138, 32.97043759001201],//bottom left
+//       [-111.47808331663012, 32.97043718282137],//bottom right
+//       [-111.47815543227983, 32.97372803105709]//top right
+//       ]]);
+// //Map.addLayer(HiscoxField3,visualization, "HiscoxField3")
+// //// Apply the buffer method to the Polygon object.
+// var HiscoxField3buffer = HiscoxField3.buffer({'distance': -20});
+// //Map.addLayer(HiscoxField3buffer,'','HiscoxField3buffer')
+// ////Clip to buffer
+// var HiscoxField3bufferClip = dataset
+//                 .filterBounds(HiscoxField3buffer)
+//                 .map(function(img) {return img.clip(HiscoxField3buffer)});
+// Map.addLayer(HiscoxField3bufferClip,visualization,'HiscoxField3bufferClip')
+// ////Turn image collection to image
+// var HiscoxField3bufferIMG = HiscoxField3bufferClip.median();
+// ////Calc NDVI
+// var HiscoxField3bufferNDVI = HiscoxField3bufferIMG.normalizedDifference([nirBand, redBand]);
+// Map.addLayer(HiscoxField3bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HiscoxField3bufferNDVI')
+// ////Export the image
+// Export.image.toDrive({
+//   image: HiscoxField3bufferNDVI,
+//   description: 'HiscoxField3NDVI',
+//   scale: 10,
+//   region:HiscoxField3buffer,
+// });
+
+
+// var HiscoxField4= ee.Geometry.Polygon(
+//     [[[-111.48085941763728, 32.98814003819383],//top left
+//       [-111.48089141104461, 32.981276215244975],//bottom left
+//       [-111.4773942511101, 32.98126139897499],//bottom right
+//       [-111.47735587064994, 32.988153446137]//top right
+//       ]]);
+// //Map.addLayer(HiscoxField4,visualization, "HiscoxField4")
+// //// Apply the buffer method to the Polygon object.
+// var HiscoxField4buffer = HiscoxField4.buffer({'distance': -20});
+// //Map.addLayer(HiscoxField4buffer,'','HiscoxField4buffer')
+// ////Clip to buffer
+// var HiscoxField4bufferClip = dataset
+//                 .filterBounds(HiscoxField4buffer)
+//                 .map(function(img) {return img.clip(HiscoxField4buffer)});
+// Map.addLayer(HiscoxField4bufferClip,visualization,'HiscoxField4bufferClip')
+// ////Turn image collection to image
+// var HiscoxField4bufferIMG = HiscoxField4bufferClip.median();
+// ////Calc NDVI
+// var HiscoxField4bufferNDVI = HiscoxField4bufferIMG.normalizedDifference([nirBand, redBand]);
+// Map.addLayer(HiscoxField4bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HiscoxField4bufferNDVI')
+// ////Export the image
+// Export.image.toDrive({
+//   image: HiscoxField4bufferNDVI,
+//   description: 'HiscoxField4NDVI',
+//   scale: 10,
+//   region:HiscoxField4buffer,
+// });
+
+
+// var HiscoxField5= ee.Geometry.Polygon(
+//     [[[-111.46890901852743, 32.99183664777352],//top left
+//       [-111.46886878973352, 32.98864643433904],//bottom left
+//       [-111.46459735269026, 32.988656834812645],//bottom right
+//       [-111.46458655455731, 32.99185899552741]//top right
+//       ]]);
+// //Map.addLayer(HiscoxField5,visualization,"HiscoxField5")
+// //// Apply the buffer method to the Polygon object.
+// var HiscoxField5buffer = HiscoxField5.buffer({'distance': -20});
+// //Map.addLayer(HiscoxField5buffer,'','HiscoxField5buffer')
+// ////Clip to buffer
+// var HiscoxField5bufferClip = dataset
+//                 .filterBounds(HiscoxField5buffer)
+//                 .map(function(img) {return img.clip(HiscoxField5buffer)});
+// Map.addLayer(HiscoxField5bufferClip,visualization,'HiscoxField5bufferClip')
+// ////Turn image collection to image
+// var HiscoxField5bufferIMG = HiscoxField5bufferClip.median();
+// ////Calc NDVI
+// var HiscoxField5bufferNDVI = HiscoxField5bufferIMG.normalizedDifference([nirBand, redBand]);
+// Map.addLayer(HiscoxField5bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HiscoxField5bufferNDVI')
+// ////Export the image
+// Export.image.toDrive({
+//   image: HiscoxField5bufferNDVI,
+//   description: 'HiscoxField5NDVI',
+//   scale: 10,
+//   region:HiscoxField5buffer,
+// });
+
+
+//Bryan Hartman///////////////////////////////////////////
+var HartmanField1= ee.Geometry.Polygon(
+     [[[-111.92857544972614, 32.96215512855169],//top left
+      [-111.92855464697037, 32.96059630228595],//bottom left
+      [-111.92507022267243, 32.960609751615884],//bottom right
+      [-111.92506969389238, 32.96216161430582]//top right
+      ]]);
+//Map.addLayer(HartmanField1,visualization,"HartmanField1")
+//// Apply the buffer method to the Polygon object.
+var HartmanField1buffer = HartmanField1.buffer({'distance': -20});
+//Map.addLayer(HartmanField1buffer,'','HartmanField1buffer')
+////Clip to buffer
+var HartmanField1bufferClip = dataset
+                .filterBounds(HartmanField1buffer)
+                .map(function(img) {return img.clip(HartmanField1buffer)});
+Map.addLayer(HartmanField1bufferClip,visualization,'HartmanField1bufferClip')
+////Turn image collection to image
+var HartmanField1bufferIMG = HartmanField1bufferClip.mean();//Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+print(HartmanField1bufferIMG, 'HartmanField1bufferIMGmean')
+
+//Prints one median value for each season 
+var HartmanField1bufferIMGMean = HartmanField1bufferIMG.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: HartmanField1,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(HartmanField1bufferIMGMean, 'HartmanField1bufferIMGMean')
+////Calc NDVI
+var HartmanField1bufferNDVI = HartmanField1bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(HartmanField1bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HartmanField1bufferNDVI')
+////Calc NDVI
+var HartmanField1bufferNDVI = HartmanField1bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(HartmanField1bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HartmanField1bufferNDVI')
+
+var HartmanField1bufferNDVIMean = HartmanField1bufferNDVI.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: HartmanField1,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(HartmanField1bufferNDVIMean, 'HartmanField1bufferNDVIMean')
+
+
+var HartmanField2= ee.Geometry.Polygon(
+     [[[-111.92403582828646, 32.95848555208427],//top left
+      [-111.92405667509917, 32.95573054580097],//bottom left
+      [-111.92117981494488, 32.955721799612505],//bottom right
+      [-111.92116939153851, 32.95848555208427]//top right
+      ]]);
+//Map.addLayer(HartmanField2,visualization,"HartmanField2")
+//// Apply the buffer method to the Polygon object.
+var HartmanField2buffer = HartmanField2.buffer({'distance': -20});
+//Map.addLayer(HartmanField2buffer,'','HartmanField2buffer')
+////Clip to buffer
+var HartmanField2bufferClip = dataset
+                .filterBounds(HartmanField2buffer)
+                .map(function(img) {return img.clip(HartmanField2buffer)});
+//Map.addLayer(HartmanField2bufferClip,visualization,'HartmanField2bufferClip')
+////Turn image collection to image
+var HartmanField2bufferIMG = HartmanField2bufferClip.mean();//Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+print(HartmanField2bufferIMG, 'HartmanField2bufferIMGmean')
+
+//Prints one median value for each season 
+var HartmanField2bufferIMGMean = HartmanField2bufferIMG.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: HartmanField2,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(HartmanField2bufferIMGMean, 'HartmanField2bufferIMGMean')
+////Calc NDVI
+var HartmanField2bufferNDVI = HartmanField2bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(HartmanField2bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HartmanField2bufferNDVI')
+////Calc NDVI
+var HartmanField2bufferNDVI = HartmanField2bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(HartmanField2bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HartmanField2bufferNDVI')
+
+var HartmanField2bufferNDVIMean = HartmanField2bufferNDVI.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: HartmanField2,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(HartmanField2bufferNDVIMean, 'HartmanField2bufferNDVIMean')
+
+
+var HartmanField3= ee.Geometry.Polygon(
+     [[[-111.92425471188163, 32.955379674271214],//top left
+     [-111.92427786835525, 32.953372082966744],//middle left
+      [-111.92413525417948, 32.95303058645661],//bottom left
+      [-111.92105196860533, 32.953041184361716],//bottom right
+      [-111.92117118033461, 32.9554001878338]//top right
+      ]]);
+//Map.addLayer(HartmanField3,visualization,"HartmanField3")
+//// Apply the buffer method to the Polygon object.
+var HartmanField3buffer = HartmanField3.buffer({'distance': -20});
+//Map.addLayer(HartmanField3buffer,'','HartmanField3buffer')
+////Clip to buffer
+var HartmanField3bufferClip = dataset
+                .filterBounds(HartmanField3buffer)
+                .map(function(img) {return img.clip(HartmanField3buffer)});
+//Map.addLayer(HartmanField3bufferClip,visualization,'HartmanField3bufferClip')
+////Turn image collection to image
+var HartmanField3bufferIMG = HartmanField3bufferClip.mean();//Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+print(HartmanField3bufferIMG, 'HartmanField3bufferIMGmean')
+
+//Prints one median value for each season 
+var HartmanField3bufferIMGMean = HartmanField3bufferIMG.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: HartmanField3,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(HartmanField3bufferIMGMean, 'HartmanField3bufferIMGMean')
+////Calc NDVI
+var HartmanField3bufferNDVI = HartmanField3bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(HartmanField3bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HartmanField3bufferNDVI')
+////Calc NDVI
+var HartmanField3bufferNDVI = HartmanField3bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(HartmanField3bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HartmanField3bufferNDVI')
+
+var HartmanField3bufferNDVIMean = HartmanField3bufferNDVI.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: HartmanField3,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(HartmanField3bufferNDVIMean, 'HartmanField3bufferNDVIMean')
+
+
+var HartmanField4= ee.Geometry.Polygon(
+     [[[-111.92059290135634, 32.95431355890777],//top left
+      [-111.92040126931381, 32.9518644280202],//bottom left
+      [-111.91199172115843, 32.9519294921156],//bottom right
+      [-111.91242900452954, 32.95415025717778]//top right
+      ]]);
+//Map.addLayer(HartmanField4,visualization,"HartmanField4")
+//// Apply the buffer method to the Polygon object.
+var HartmanField4buffer = HartmanField4.buffer({'distance': -20});
+//Map.addLayer(HartmanField4buffer,'','HartmanField4buffer')
+////Clip to buffer
+var HartmanField4bufferClip = dataset
+                .filterBounds(HartmanField4buffer)
+                .map(function(img) {return img.clip(HartmanField4buffer)});
+//Map.addLayer(HartmanField4bufferClip,visualization,'HartmanField4bufferClip')
+////Turn image collection to image
+var HartmanField4bufferIMG = HartmanField4bufferClip.mean();//Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+print(HartmanField4bufferIMG, 'HartmanField4bufferIMGmean')
+
+//Prints one median value for each season 
+var HartmanField4bufferIMGMean = HartmanField4bufferIMG.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: HartmanField4,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(HartmanField4bufferIMGMean, 'HartmanField4bufferIMGMean')
+////Calc NDVI
+var HartmanField4bufferNDVI = HartmanField4bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(HartmanField4bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HartmanField4bufferNDVI')
+////Calc NDVI
+var HartmanField4bufferNDVI = HartmanField4bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(HartmanField4bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HartmanField4bufferNDVI')
+
+var HartmanField4bufferNDVIMean = HartmanField4bufferNDVI.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: HartmanField4,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(HartmanField4bufferNDVIMean, 'HartmanField4bufferNDVIMean')
+
+
+var HartmanField5= ee.Geometry.Polygon(
+     [[[-111.92037539481854, 32.95176938650246],//top left
+      [-111.92020315090011, 32.949381853261606],//bottom left
+      [-111.91175398402403, 32.94916911171979],//bottom right
+      [-111.91200459666211, 32.951813797366874]//top right
+      ]]);
+//Map.addLayer(HartmanField5,visualization,"HartmanField5")
+//// Apply the buffer method to the Polygon object.
+var HartmanField5buffer = HartmanField5.buffer({'distance': -20});
+//Map.addLayer(HartmanField5buffer,'','HartmanField5buffer')
+////Clip to buffer
+var HartmanField5bufferClip = dataset
+                .filterBounds(HartmanField5buffer)
+                .map(function(img) {return img.clip(HartmanField5buffer)});
+//Map.addLayer(HartmanField5bufferClip,visualization,'HartmanField5bufferClip')
+////Turn image collection to image
+var HartmanField5bufferIMG = HartmanField5bufferClip.mean();//Map.addLayer(SPI1yMed05fal, colorbarOptions1, 'SPI1yMed05fal');
+print(HartmanField5bufferIMG, 'HartmanField5bufferIMGmean')
+
+//Prints one median value for each season 
+var HartmanField5bufferIMGMean = HartmanField5bufferIMG.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: HartmanField5,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(HartmanField5bufferIMGMean, 'HartmanField5bufferIMGMean')
+////Calc NDVI
+var HartmanField5bufferNDVI = HartmanField5bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(HartmanField5bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HartmanField5bufferNDVI')
+////Calc NDVI
+var HartmanField5bufferNDVI = HartmanField5bufferIMG.normalizedDifference([nirBand, redBand]);
+Map.addLayer(HartmanField5bufferNDVI, {min:0, max:1, palette: ndvi_pal},'HartmanField5bufferNDVI')
+
+var HartmanField5bufferNDVIMean = HartmanField5bufferNDVI.reduceRegion({ 
+  reducer: ee.Reducer.mean(),
+  geometry: HartmanField5,
+  scale: 10,
+  maxPixels: 1e9
+});
+print(HartmanField5bufferNDVIMean, 'HartmanField5bufferNDVIMean')
